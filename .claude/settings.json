@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "engineering-team": {
+      "source": {
+        "source": "github",
+        "repo": "sosingh-gd/team-claude-plugins"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "python-react-fullstack@engineering-team": true
+  }
+}
