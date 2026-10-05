@@ -1,35 +1,36 @@
-// POST + fetch streaming: EventSource can't send a request body.
-import { createParser, type EventSourceMessage } from 'eventsource-parser';
+// Uses fetch directly because EventSource can't send a POST body.
+import { createParser } from 'eventsource-parser';
 import { env } from '@/config/env';
 import { ApiError, defaultHeaders } from '@/lib/http';
 import type { ChatEvent, ChatRunRequest } from '../types';
 
-const TERMINAL = new Set<ChatEvent['type']>(['run_completed', 'run_failed']);
-
+/**
+ * Sends one message and calls `onText` with each piece of Claude's reply as it arrives.
+ * Resolves when the reply is complete; throws if it fails or the connection drops.
+ */
 export async function streamChatRun(
+  conversationId: string,
   body: ChatRunRequest,
-  options: { signal: AbortSignal; onEvent: (event: ChatEvent) => void },
+  options: { signal: AbortSignal; onText: (text: string) => void },
 ): Promise<void> {
-  const res = await fetch(`${env.apiBaseUrl}/api/v1/chat/runs/stream`, {
+  const url = `${env.apiBaseUrl}/api/v1/chat/conversations/${encodeURIComponent(conversationId)}/stream`;
+  const res = await fetch(url, {
     method: 'POST',
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-      ...defaultHeaders(),
-    },
+    headers: { 'Content-Type': 'application/json', ...defaultHeaders() },
     body: JSON.stringify(body),
     signal: options.signal,
   });
-  // Errors before the stream starts (auth, validation, unknown conversation) are Problem Details.
+  // Problems found before streaming starts (not signed in, bad input) come back as a
+  // normal error response.
   if (!res.ok || !res.body) throw await ApiError.fromResponse(res);
 
-  let sawTerminal = false;
+  let lastEvent: ChatEvent | undefined;
   const parser = createParser({
-    onEvent(message: EventSourceMessage) {
+    onEvent(message) {
       const event = JSON.parse(message.data) as ChatEvent;
-      if (TERMINAL.has(event.type)) sawTerminal = true;
-      options.onEvent(event);
+      lastEvent = event;
+      if (event.type === 'text_delta') options.onText(event.text);
     },
   });
 
@@ -39,7 +40,10 @@ export async function streamChatRun(
     if (done) break;
     parser.feed(value);
   }
-  if (!sawTerminal && !options.signal.aborted) {
+
+  // The server always ends with run_completed or run_failed.
+  if (lastEvent?.type === 'run_failed') throw new Error(lastEvent.message);
+  if (lastEvent?.type !== 'run_completed') {
     throw new Error('The connection dropped before the reply finished.');
   }
 }

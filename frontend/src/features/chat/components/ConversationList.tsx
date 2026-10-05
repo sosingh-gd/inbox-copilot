@@ -2,9 +2,14 @@ import { MessageSquare, Plus } from 'lucide-react';
 import { IconButton, Spinner, StatusText } from '@/components';
 import { errorMessage } from '@/lib/http';
 import { cn } from '@/utils/cn';
-import { useConversationsQuery } from '../../api/chat.queries';
-import { formatUpdatedAt } from '../../utils';
-import type { ConversationListProps } from './ConversationList.types';
+import { useConversationsQuery } from '../api/chat.api';
+import { formatUpdatedAt } from '../utils';
+
+interface ConversationListProps {
+  activeConversationId?: string;
+  onSelect: (conversationId: string) => void;
+  onNewConversation: () => void;
+}
 
 export function ConversationList({
   activeConversationId,

@@ -1,7 +1,13 @@
 import { BrainCircuit, Cpu, LockKeyhole } from 'lucide-react';
 import { SegmentedControl, Select } from '@/components';
-import { AGENT_OPTIONS, AGENTS, MODEL_OPTIONS, REASONING_OPTIONS } from '../../constants';
-import type { ChatSettingsBarProps } from './ChatSettingsBar.types';
+import { AGENT_OPTIONS, AGENTS, MODEL_OPTIONS, REASONING_OPTIONS } from '../constants';
+import type { ChatSettings } from '../types';
+
+export interface ChatSettingsBarProps {
+  settings: ChatSettings;
+  isAgentLocked: boolean;
+  onChange: <K extends keyof ChatSettings>(name: K, value: ChatSettings[K]) => void;
+}
 
 export function ChatSettingsBar({ settings, isAgentLocked, onChange }: ChatSettingsBarProps) {
   const AgentIcon = AGENTS[settings.agent].icon;

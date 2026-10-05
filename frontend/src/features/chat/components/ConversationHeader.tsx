@@ -1,6 +1,12 @@
 import { cn } from '@/utils/cn';
-import { AGENTS } from '../../constants';
-import type { ConversationHeaderProps } from './ConversationHeader.types';
+import { AGENTS } from '../constants';
+import type { AgentKind } from '../types';
+
+interface ConversationHeaderProps {
+  title: string;
+  agent: AgentKind;
+  isReplying: boolean;
+}
 
 export function ConversationHeader({ title, agent, isReplying }: ConversationHeaderProps) {
   return (

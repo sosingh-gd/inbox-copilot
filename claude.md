@@ -42,19 +42,20 @@ Treat the project as one evolving codebase rather than separate demos. New featu
 backend/    FastAPI app (app/core, app/db, app/api, app/features/<feature>) - see backend/README.md
 frontend/   React app (src/app, pages, features/<feature>, components/<atomic level>, lib, config)
 contract/   openapi.json, generated from the backend and committed
-Makefile    make install | dev | api | test | check
+Makefile    make install | dev | api | check
 ```
 
 - **One contract, flowing one way.** Pydantic schemas in `backend/app/features/<f>/schemas.py` define the API (camelCase JSON via `ApiModel`). `make api` exports `contract/openapi.json` and regenerates `frontend/src/lib/api/schema.d.ts`. Never hand-write a TypeScript type the backend already defines, and never edit generated files.
 - **Features mirror each other by name** on both sides (`backend/app/features/chat` and `frontend/src/features/chat`).
-- **Backend layering:** router (HTTP only) -> service (business rules, no FastAPI imports) -> repository (SQL). External systems (Gmail, Calendar, Claude) sit behind a `Protocol` in `sources.py` / `llm.py`, so fakes can replace them in tests and evals.
+- **Backend layering:** router (HTTP only) -> service (business rules, no FastAPI imports) -> repository (SQL). External systems (Gmail, Calendar, Claude) sit behind a `Protocol` in `sources.py` / `llm.py`, so local fake data can replace them without changing the rest of the code.
 - **Errors:** services raise errors from `app/core/errors.py`; every non-2xx response is RFC 9457 Problem Details with a stable `code`. The frontend turns them into `ApiError` (`src/lib/http.ts`).
 - **Frontend boundaries** (enforced by ESLint): imports flow `app -> pages -> features -> components/hooks/lib/config/utils`. Features import each other only through pages, and other code imports a feature only through its `index.ts`. Components call TanStack Query hooks from `features/<f>/api/`, never `fetch`.
-- **Adding an endpoint end to end:** schemas -> service/repository -> router -> backend tests -> `make api` -> `features/<f>/api/*.api.ts`, `*.keys.ts`, `*.queries.ts` -> components -> frontend tests.
-- Run `make check` before considering a change done.
+- **Adding an endpoint end to end:** schemas -> service/repository -> router -> `make api` -> `frontend/src/features/<f>/api/<f>.api.ts` -> `hooks/` -> components.
+- Run `make check` (formatting, lint and type checks) before considering a change done.
 
 ## Notes for Claude
 
 - Do not hard-code secrets or credentials. Load them from environment variables or local config files excluded from version control.
 - When adding a new feature, keep earlier stages working.
 - Ask before introducing new dependencies or major structural changes.
+- **No tests.** This is a learning project: do not write, add or run automated tests (no pytest, Vitest, Testing Library, MSW or similar), and do not add test tooling or test folders. Check changes with `make check` and by running the app instead.

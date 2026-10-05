@@ -85,28 +85,13 @@
         "title": "ChatEvent"
       },
       "ChatRunRequest": {
-        "description": "Send one user message. Omit conversationId to start a new conversation.\n\nFor an existing conversation the agent stays fixed; model and reasoning may change.",
+        "description": "Send one user message. The agent is fixed per conversation; model and reasoning may\nchange from message to message.",
         "properties": {
-          "agent": {
-            "$ref": "#/components/schemas/AgentKind",
-            "default": "inbox"
-          },
           "content": {
             "maxLength": 20000,
             "minLength": 1,
             "title": "Content",
             "type": "string"
-          },
-          "conversationId": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Conversationid"
           },
           "model": {
             "$ref": "#/components/schemas/ModelChoice",
@@ -121,6 +106,25 @@
           "content"
         ],
         "title": "ChatRunRequest",
+        "type": "object"
+      },
+      "ConversationCreate": {
+        "description": "Start an empty conversation. Its first message gives it a title.",
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentKind",
+            "default": "inbox"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelChoice",
+            "default": "sonnet"
+          },
+          "reasoning": {
+            "$ref": "#/components/schemas/ReasoningLevel",
+            "default": "balanced"
+          }
+        },
+        "title": "ConversationCreate",
         "type": "object"
       },
       "ConversationDetail": {
@@ -1212,6 +1216,141 @@
         "tags": [
           "chat"
         ]
+      },
+      "post": {
+        "operationId": "create_conversation",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "inbox_copilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Inbox Copilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "summary": "Create Conversation",
+        "tags": [
+          "chat"
+        ]
       }
     },
     "/api/v1/chat/conversations/{conversation_id}": {
@@ -1350,11 +1489,20 @@
         ]
       }
     },
-    "/api/v1/chat/runs/stream": {
+    "/api/v1/chat/conversations/{conversation_id}/stream": {
       "post": {
         "description": "Save the user's message and stream Claude's reply.\n\nAuth, validation and unknown-conversation errors happen before streaming starts and\nreturn normal Problem Details. After the 200, failures arrive as a run_failed event.",
         "operationId": "stream_chat_run",
         "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
           {
             "in": "cookie",
             "name": "inbox_copilot_session",

@@ -1,8 +1,17 @@
 import { Send } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { IconButton, TextArea } from '@/components';
-import { ChatSettingsBar } from '../ChatSettingsBar';
-import type { ChatComposerProps } from './ChatComposer.types';
+import { ChatSettingsBar, type ChatSettingsBarProps } from './ChatSettingsBar';
+
+interface ChatComposerProps {
+  settings: ChatSettingsBarProps['settings'];
+  isAgentLocked: boolean;
+  onSettingChange: ChatSettingsBarProps['onChange'];
+  draft: string;
+  onDraftChange: (draft: string) => void;
+  canSend: boolean;
+  onSend: () => void;
+}
 
 export function ChatComposer({
   settings,

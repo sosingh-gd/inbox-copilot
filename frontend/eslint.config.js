@@ -45,7 +45,6 @@ export default tseslint.config(
         { type: 'templates', pattern: 'src/components/templates/*' },
         { type: 'components', pattern: 'src/components' }, // the barrel: src/components/index.ts
         { type: 'shared', pattern: 'src/(hooks|lib|config|utils|types|styles)' },
-        { type: 'test', pattern: 'src/test' },
         { type: 'entry', pattern: 'src' }, // main.tsx (first matching descriptor wins)
       ],
     },
@@ -77,16 +76,10 @@ export default tseslint.config(
             allow('molecules', ['molecules', 'atoms', 'shared']),
             allow('atoms', ['atoms', 'shared']),
             allow('shared', ['shared']),
-            allow('test', ['test', 'shared', 'app', 'feature', 'components', ...SHARED_UI]),
           ],
         },
       ],
     },
-  },
-  {
-    // Tests and test helpers may reach anywhere they need to.
-    files: ['src/**/*.test.{ts,tsx}'],
-    rules: { 'boundaries/dependencies': 'off' },
   },
   {
     files: ['*.config.{js,ts}'],

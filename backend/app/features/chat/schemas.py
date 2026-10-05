@@ -32,14 +32,17 @@ class ChatSettings(ApiModel):
     reasoning: ReasoningLevel = ReasoningLevel.balanced
 
 
-class ChatRunRequest(ChatSettings):
-    """Send one user message. Omit conversationId to start a new conversation.
+class ConversationCreate(ChatSettings):
+    """Start an empty conversation. Its first message gives it a title."""
 
-    For an existing conversation the agent stays fixed; model and reasoning may change.
-    """
 
-    conversation_id: str | None = None
+class ChatRunRequest(ApiModel):
+    """Send one user message. The agent is fixed per conversation; model and reasoning may
+    change from message to message."""
+
     content: str = Field(min_length=1, max_length=20_000)
+    model: ModelChoice = ModelChoice.sonnet
+    reasoning: ReasoningLevel = ReasoningLevel.balanced
 
 
 class MessageRead(ApiModel):

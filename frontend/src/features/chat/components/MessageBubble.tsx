@@ -1,7 +1,13 @@
 import { Bot } from 'lucide-react';
 import { Avatar } from '@/components';
 import { cn } from '@/utils/cn';
-import type { MessageBubbleProps } from './MessageBubble.types';
+import type { ChatMessage } from '../types';
+
+interface MessageBubbleProps {
+  role: ChatMessage['role'];
+  content: string;
+  userInitial: string;
+}
 
 export function MessageBubble({ role, content, userInitial }: MessageBubbleProps) {
   const isUser = role === 'user';
@@ -12,7 +18,7 @@ export function MessageBubble({ role, content, userInitial }: MessageBubbleProps
           <Bot className="h-4 w-4" />
         </Avatar>
       )}
-      {/* Model output is rendered as plain text, never as HTML. */}
+      {/* Claude's reply is shown as plain text, never as HTML. */}
       <div
         className={cn(
           'max-w-[82%] whitespace-pre-wrap rounded-lg px-4 py-3 text-sm leading-6 shadow-sm sm:max-w-[72%]',

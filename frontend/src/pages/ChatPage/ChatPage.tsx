@@ -36,9 +36,11 @@ export function ChatPage() {
       }
       sidebarTitle="Conversations"
     >
+      {/* The key gives each conversation a fresh panel, so no state carries over. */}
       <ChatPanel
         conversationId={conversationId}
-        onConversationStarted={(id) => navigate(paths.chat(id), { replace: true })}
+        key={conversationId ?? 'new'}
+        onConversationCreated={(id) => navigate(paths.chat(id), { replace: true })}
         userInitial={user?.email.charAt(0).toUpperCase() ?? '?'}
       />
     </AppShellTemplate>

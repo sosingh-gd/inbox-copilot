@@ -1,8 +1,15 @@
 import { useEffect, useRef } from 'react';
 import { StatusText } from '@/components';
-import { MessageBubble } from '../MessageBubble';
-import { TypingIndicator } from '../TypingIndicator';
-import type { MessageListProps } from './MessageList.types';
+import type { ChatMessage } from '../types';
+import { MessageBubble } from './MessageBubble';
+import { TypingIndicator } from './TypingIndicator';
+
+interface MessageListProps {
+  messages: ChatMessage[];
+  isTyping: boolean;
+  userInitial: string;
+  error: string | null;
+}
 
 export function MessageList({ messages, isTyping, userInitial, error }: MessageListProps) {
   const endRef = useRef<HTMLDivElement>(null);

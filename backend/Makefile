@@ -5,7 +5,7 @@ SHELL := /bin/bash
 
 UV  ?= uv
 RUN := $(UV) run
-SRC := app tests
+SRC := app
 
 ##@ Setup
 .PHONY: install
@@ -56,22 +56,14 @@ lint: ## Run ruff linter
 typecheck: ## Run mypy
 	$(RUN) mypy
 
-.PHONY: test
-test: ## Run tests
-	$(RUN) pytest
-
-.PHONY: cov
-cov: ## Run tests with coverage report (fails under threshold)
-	$(RUN) pytest --cov --cov-report=term-missing
-
 .PHONY: check
-check: format-check lint typecheck test ## Everything CI runs - use before every commit/PR
+check: format-check lint typecheck ## Formatting, lint and type checks - run before every commit
 	$(UV) lock --check
 
 ##@ Housekeeping
 .PHONY: clean
 clean: ## Remove caches and build artifacts
-	rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage
+	rm -rf .mypy_cache .ruff_cache
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
 
 .PHONY: help

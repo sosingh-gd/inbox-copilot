@@ -88,7 +88,8 @@ export interface paths {
         /** List Conversations */
         get: operations["list_conversations"];
         put?: never;
-        post?: never;
+        /** Create Conversation */
+        post: operations["create_conversation"];
         delete?: never;
         options?: never;
         head?: never;
@@ -112,7 +113,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/chat/runs/stream": {
+    "/api/v1/chat/conversations/{conversation_id}/stream": {
         parameters: {
             query?: never;
             header?: never;
@@ -201,17 +202,24 @@ export interface components {
         ChatEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["RunCompletedEvent"] | components["schemas"]["RunFailedEvent"];
         /**
          * ChatRunRequest
-         * @description Send one user message. Omit conversationId to start a new conversation.
-         *
-         *     For an existing conversation the agent stays fixed; model and reasoning may change.
+         * @description Send one user message. The agent is fixed per conversation; model and reasoning may
+         *     change from message to message.
          */
         ChatRunRequest: {
-            /** @default inbox */
-            agent: components["schemas"]["AgentKind"];
             /** Content */
             content: string;
-            /** Conversationid */
-            conversationId?: string | null;
+            /** @default sonnet */
+            model: components["schemas"]["ModelChoice"];
+            /** @default balanced */
+            reasoning: components["schemas"]["ReasoningLevel"];
+        };
+        /**
+         * ConversationCreate
+         * @description Start an empty conversation. Its first message gives it a title.
+         */
+        ConversationCreate: {
+            /** @default inbox */
+            agent: components["schemas"]["AgentKind"];
             /** @default sonnet */
             model: components["schemas"]["ModelChoice"];
             /** @default balanced */
@@ -921,6 +929,112 @@ export interface operations {
             };
         };
     };
+    create_conversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                inbox_copilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
     get_conversation: {
         parameters: {
             query?: never;
@@ -1029,7 +1143,9 @@ export interface operations {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                conversation_id: string;
+            };
             cookie?: {
                 inbox_copilot_session?: string | null;
             };

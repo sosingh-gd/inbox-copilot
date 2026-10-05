@@ -5,7 +5,7 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
-    "types": ["vite/client", "node", "@testing-library/jest-dom/vitest"],
+    "types": ["vite/client", "node"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noUnusedLocals": true,

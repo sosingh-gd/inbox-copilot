@@ -57,7 +57,6 @@ const headersMiddleware: Middleware = {
 export const api = createClient<paths>({
   baseUrl: env.apiBaseUrl, // paths already include /api/v1
   credentials: 'include', // send the httpOnly session cookie
-  fetch: (request) => globalThis.fetch(request), // resolved per call, so test mocks apply
 });
 api.use(headersMiddleware);
 

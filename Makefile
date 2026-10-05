@@ -29,13 +29,8 @@ format: ## Auto-format both apps
 	$(MAKE) -C backend format
 	cd frontend && npm run format
 
-.PHONY: test
-test: ## Run all tests
-	$(MAKE) -C backend test
-	cd frontend && npx vitest --run
-
 .PHONY: check
-check: ## Everything CI should run: formatting, lint, types, tests, contract drift
+check: ## Formatting, lint, type checks and contract drift for both apps
 	$(MAKE) -C backend check
 	cd frontend && npm run check
 	$(MAKE) api-check

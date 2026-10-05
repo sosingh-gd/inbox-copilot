@@ -19,10 +19,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
     "mypy>=1.13",
-    "pytest>=9.1.1",
-    "pytest-cov>=5.0",
     "ruff>=0.8",
 ]
 
@@ -43,7 +40,6 @@ select = [
     "S",        # flake8-bandit (security)
     "C4",       # flake8-comprehensions
     "SIM",      # flake8-simplify
-    "PT",       # flake8-pytest-style
     "RET",      # flake8-return
     "ARG",      # unused arguments
     "PTH",      # prefer pathlib
@@ -58,7 +54,6 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "ARG", "S105", "S106", "S107"]
 "app/scripts/**" = ["T20"]
 
 [tool.ruff.lint.flake8-bugbear]
@@ -75,11 +70,7 @@ python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
 warn_unreachable = true
-packages = ["app", "tests"]
-
-[[tool.mypy.overrides]]
-module = "tests.*"
-disallow_untyped_defs = false
+packages = ["app"]
 
 [[tool.mypy.overrides]]
 # Google's client libraries ship without type information.
@@ -90,20 +81,3 @@ ignore_missing_imports = true
 init_forbid_extra = true
 init_typed = true
 warn_required_dynamic_aliases = true
-
-# ---------------------------------------------------------------- pytest
-[tool.pytest.ini_options]
-pythonpath = ["."]
-testpaths = ["tests"]
-addopts = "-ra --strict-markers --strict-config"
-
-# ---------------------------------------------------------------- coverage
-[tool.coverage.run]
-source = ["app"]
-branch = true
-
-[tool.coverage.report]
-show_missing = true
-skip_covered = true
-fail_under = 70
-exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]

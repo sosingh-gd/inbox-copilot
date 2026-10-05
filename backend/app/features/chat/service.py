@@ -15,6 +15,7 @@ from .repository import ChatRepository
 from .schemas import (
     AgentKind,
     ChatRunRequest,
+    ConversationCreate,
     ConversationDetail,
     ConversationSummary,
     ModelChoice,
@@ -22,6 +23,7 @@ from .schemas import (
 )
 
 TITLE_LENGTH = 60
+NEW_CONVERSATION_TITLE = "New conversation"
 
 
 @dataclass(frozen=True)
@@ -56,22 +58,26 @@ class ChatService:
     def get_conversation(self, user_id: int, conversation_id: str) -> ConversationDetail:
         return ConversationDetail.model_validate(self._owned_conversation(user_id, conversation_id))
 
-    def start_turn(self, user_id: int, request: ChatRunRequest) -> ChatTurn:
-        """Validate and save the user's message. Errors here become normal 4xx responses."""
-        if request.conversation_id is None:
-            conversation = self.repo.add_conversation(
-                Conversation(
-                    user_id=user_id,
-                    title=_title_from(request.content),
-                    agent=request.agent,
-                    model=request.model,
-                    reasoning=request.reasoning,
-                )
+    def create_conversation(self, user_id: int, request: ConversationCreate) -> ConversationSummary:
+        conversation = self.repo.add_conversation(
+            Conversation(
+                user_id=user_id,
+                title=NEW_CONVERSATION_TITLE,
+                agent=request.agent,
+                model=request.model,
+                reasoning=request.reasoning,
             )
-        else:
-            conversation = self._owned_conversation(user_id, request.conversation_id)
-            conversation.model = request.model
-            conversation.reasoning = request.reasoning
+        )
+        self.repo.commit()
+        return ConversationSummary.model_validate(conversation)
+
+    def start_turn(self, user_id: int, conversation_id: str, request: ChatRunRequest) -> ChatTurn:
+        """Validate and save the user's message. Errors here become normal 4xx responses."""
+        conversation = self._owned_conversation(user_id, conversation_id)
+        if not conversation.messages:
+            conversation.title = _title_from(request.content)
+        conversation.model = request.model
+        conversation.reasoning = request.reasoning
 
         message = self.repo.add_message(
             ChatMessage(conversation_id=conversation.id, role="user", content=request.content)

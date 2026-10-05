@@ -23,8 +23,7 @@ export const router = createBrowserRouter([
         element: <RequireAuth />,
         children: [
           {
-            // One route for "new" and existing conversations, so the page stays mounted
-            // (and keeps streaming) when a new conversation gets its id.
+            // /chats is a new chat, /chats/<id> an existing one.
             path: `${paths.chats}/:conversationId?`,
             lazy: () => import('@/pages/ChatPage').then((m) => ({ Component: m.ChatPage })),
           },

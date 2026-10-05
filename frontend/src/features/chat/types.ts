@@ -14,5 +14,3 @@ export type ReasoningLevel = Schemas['ReasoningLevel'];
 
 // Frontend-only shapes, derived from the generated ones.
 export type ChatSettings = Pick<ConversationSummary, 'agent' | 'model' | 'reasoning'>;
-
-export type DisplayMessage = Pick<ChatMessage, 'id' | 'role' | 'content'>;

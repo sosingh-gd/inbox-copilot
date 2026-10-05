@@ -21,7 +21,7 @@ Claude-powered chat that streams replies over Server-Sent Events.
 
 3. Run it: `make dev` (API on <http://localhost:8000>, docs at <http://localhost:8000/api/docs>).
 
-Run `make` to see every command. `make check` (format, lint, strict mypy, tests) must pass before
+Run `make` to see every command. `make check` (format, lint, strict mypy) must pass before
 committing.
 
 ## Layout
@@ -49,15 +49,14 @@ Each feature follows the same split:
 | `service.py` | Business rules. Never imports FastAPI; raises errors from `core/errors.py` |
 | `repository.py` | SQLAlchemy queries |
 | `models.py` | ORM tables (also import them in `db/models.py`) |
-| `sources.py` / `llm.py` | Adapters for external systems, behind a `Protocol` so tests and evals can swap in fakes |
+| `sources.py` / `llm.py` | Adapters for external systems, behind a `Protocol` so local fake data can stand in for them |
 | `deps.py` | Wires the above together for FastAPI's dependency injection |
 
 ## Adding an endpoint
 
 1. Add schemas, then service/repository logic, then a thin route in the feature's `router.py`.
    New features get their router included in `app/api/v1/router.py`.
-2. Add tests under `tests/<feature>/` that go through HTTP with camelCase payloads.
-3. From the repo root, run `make api` to regenerate `contract/openapi.json` and the frontend's
+2. From the repo root, run `make api` to regenerate `contract/openapi.json` and the frontend's
    TypeScript types.
 
 ## Security notes
