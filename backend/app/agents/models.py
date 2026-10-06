@@ -2,13 +2,16 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
-from anthropic.types import ToolUnionParam
+from anthropic.types import ToolUnionParam, Usage
 from pydantic import BaseModel
 
 SONNET = "claude-sonnet-5-5"
 HAIKU = "claude-haiku-4-5"
+
+# How hard Claude thinks before answering. None keeps the model's own default.
+Effort = Literal["low", "medium", "high", "xhigh"]
 
 
 @dataclass(frozen=True)
@@ -35,6 +38,24 @@ class AgentDefinition:
     model: str
     max_turns: int = 8
     max_tokens: int = 4096
+    effort: Effort | None = None
+
+
+@dataclass
+class TokenUsage:
+    """Tokens spent on one user message, sub-agents included. Every run that works on the
+    message adds to the same instance."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+
+    def add(self, usage: Usage) -> None:
+        self.input_tokens += usage.input_tokens
+        self.output_tokens += usage.output_tokens
+        self.cache_read_tokens += usage.cache_read_input_tokens or 0
+        self.cache_write_tokens += usage.cache_creation_input_tokens or 0
 
 
 class AgentError(Exception):

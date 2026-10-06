@@ -1,4 +1,5 @@
 from collections.abc import AsyncIterator
+from dataclasses import replace
 from datetime import date
 
 from anthropic.types import MessageParam
@@ -11,7 +12,7 @@ from app.features.weather.sources import WeatherSource
 from .calendar_agent import build_calendar_agent
 from .email_agent import build_email_agent
 from .events import AgentEvent
-from .models import AgentDefinition, AgentError
+from .models import Effort, TokenUsage
 from .orchestrator import build_orchestrator
 from .runner import AgentRunner
 from .weather_agent import build_weather_agent
@@ -19,7 +20,8 @@ from .weather_agent import build_weather_agent
 
 class AgentRegistry:
     """The agents for one request. Built per request because the tools use the
-    signed-in user's Google credentials."""
+    signed-in user's Google credentials. Every chat goes to the orchestrator, which
+    decides which specialists to call."""
 
     def __init__(
         self,
@@ -36,15 +38,14 @@ class AgentRegistry:
             build_calendar_agent(calendar_source, today),
             build_weather_agent(weather_source, settings),
         ]
-        general = build_orchestrator(runner, specialists, today)
         self._runner = runner
-        self._agents = {a.name: a for a in (*specialists, general)}
+        self._usage = TokenUsage()  # one registry per request, so one total per message
+        self._orchestrator = build_orchestrator(runner, specialists, today, self._usage)
 
-    def get(self, name: str) -> AgentDefinition:
-        try:
-            return self._agents[name]
-        except KeyError:
-            raise AgentError("unknown_agent", f"No agent named {name}.") from None
-
-    def stream(self, name: str, messages: list[MessageParam]) -> AsyncIterator[AgentEvent]:
-        return self._runner.stream(self.get(name), messages)
+    def stream(
+        self, messages: list[MessageParam], model: str, effort: Effort
+    ) -> AsyncIterator[AgentEvent]:
+        """Run the orchestrator with the model and effort chosen for this message. The
+        specialists keep their own fixed settings."""
+        orchestrator = replace(self._orchestrator, model=model, effort=effort)
+        return self._runner.stream(orchestrator, messages, self._usage)

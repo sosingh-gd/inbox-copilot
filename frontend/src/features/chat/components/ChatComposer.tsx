@@ -5,7 +5,6 @@ import { ChatSettingsBar, type ChatSettingsBarProps } from './ChatSettingsBar';
 
 interface ChatComposerProps {
   settings: ChatSettingsBarProps['settings'];
-  isAgentLocked: boolean;
   onSettingChange: ChatSettingsBarProps['onChange'];
   draft: string;
   onDraftChange: (draft: string) => void;
@@ -15,7 +14,6 @@ interface ChatComposerProps {
 
 export function ChatComposer({
   settings,
-  isAgentLocked,
   onSettingChange,
   draft,
   onDraftChange,
@@ -32,11 +30,7 @@ export function ChatComposer({
 
   return (
     <div className="w-full">
-      <ChatSettingsBar
-        isAgentLocked={isAgentLocked}
-        onChange={onSettingChange}
-        settings={settings}
-      />
+      <ChatSettingsBar onChange={onSettingChange} settings={settings} />
       <div className="flex items-end gap-3 rounded-lg border border-slate-300 bg-white p-2 shadow-sm focus-within:border-brand focus-within:ring-4 focus-within:ring-blue-100">
         <TextArea
           aria-label="Message"

@@ -8,9 +8,12 @@ export type ConversationDetail = Schemas['ConversationDetail'];
 export type ChatMessage = Schemas['MessageRead'];
 export type ChatRunRequest = Schemas['ChatRunRequest'];
 export type ChatEvent = Schemas['ChatEvent'];
-export type AgentKind = Schemas['AgentKind'];
 export type ModelChoice = Schemas['ModelChoice'];
 export type ReasoningLevel = Schemas['ReasoningLevel'];
+export type Usage = Schemas['Usage'];
+export type TextPart = Schemas['TextPart'];
+export type ToolPart = Schemas['ToolPart'];
+export type MessagePart = TextPart | ToolPart;
 
 // Frontend-only shapes, derived from the generated ones.
-export type ChatSettings = Pick<ConversationSummary, 'agent' | 'model' | 'reasoning'>;
+export type ChatSettings = Pick<ConversationSummary, 'model' | 'reasoning'>;

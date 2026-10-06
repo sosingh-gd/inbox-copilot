@@ -1,34 +1,39 @@
 import { cn } from '@/utils/cn';
-import { AGENTS } from '../constants';
-import type { AgentKind } from '../types';
+import type { Usage } from '../types';
+import { TokenCounts } from './TokenCounts';
 
 interface ConversationHeaderProps {
   title: string;
-  agent: AgentKind;
   isReplying: boolean;
+  /** Tokens used by the whole conversation, or null before its first reply. */
+  usage: Usage | null;
 }
 
-export function ConversationHeader({ title, agent, isReplying }: ConversationHeaderProps) {
+export function ConversationHeader({ title, isReplying, usage }: ConversationHeaderProps) {
   return (
     <div className="flex h-16 shrink-0 items-center border-b border-slate-200 px-5 sm:px-8">
-      <div className="min-w-0">
-        <h1 className="truncate text-base font-semibold text-ink">{title}</h1>
-        <p className="mt-0.5 text-xs text-ink-muted">{AGENTS[agent].label}</p>
-      </div>
-      <span
-        className={cn(
-          'ml-auto inline-flex items-center gap-2 text-xs font-medium',
-          isReplying ? 'text-brand' : 'text-success',
+      <h1 className="min-w-0 truncate text-base font-semibold text-ink">{title}</h1>
+      <div className="ml-auto flex shrink-0 items-center gap-4 pl-4 text-xs">
+        {usage && (
+          <span className="hidden text-ink-muted sm:inline-flex">
+            <TokenCounts usage={usage} />
+          </span>
         )}
-      >
         <span
           className={cn(
-            'h-2 w-2 rounded-full',
-            isReplying ? 'animate-pulse bg-brand' : 'bg-emerald-500',
+            'inline-flex items-center gap-2 font-medium',
+            isReplying ? 'text-brand' : 'text-success',
           )}
-        />
-        {isReplying ? 'Replying' : 'Ready'}
-      </span>
+        >
+          <span
+            className={cn(
+              'h-2 w-2 rounded-full',
+              isReplying ? 'animate-pulse bg-brand' : 'bg-emerald-500',
+            )}
+          />
+          {isReplying ? 'Replying' : 'Ready'}
+        </span>
+      </div>
     </div>
   );
 }

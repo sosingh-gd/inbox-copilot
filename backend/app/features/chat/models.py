@@ -1,7 +1,8 @@
 from datetime import datetime
+from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import ForeignKey, String, Text
+from sqlalchemy import JSON, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, UTCDateTime, utc_now
@@ -17,7 +18,6 @@ class Conversation(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(200))
-    agent: Mapped[str] = mapped_column(String(32))  # fixed for the conversation's lifetime
     model: Mapped[str] = mapped_column(String(32))
     reasoning: Mapped[str] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
@@ -39,6 +39,9 @@ class ChatMessage(Base):
     )
     role: Mapped[str] = mapped_column(String(16))  # "user" | "assistant"
     content: Mapped[str] = mapped_column(Text)
+    parts: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON)  # schemas.MessagePart dicts
+    duration_ms: Mapped[int | None] = mapped_column(Integer)  # assistant replies only
+    usage: Mapped[dict[str, int] | None] = mapped_column(JSON)  # a schemas.Usage, as a dict
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
 
     conversation: Mapped[Conversation] = relationship(back_populates="messages")

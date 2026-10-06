@@ -1,15 +1,6 @@
 {
   "components": {
     "schemas": {
-      "AgentKind": {
-        "enum": [
-          "inbox",
-          "calendar",
-          "general"
-        ],
-        "title": "AgentKind",
-        "type": "string"
-      },
       "ChatEvent": {
         "description": "Every SSE `data:` payload on the chat stream is one of these.",
         "discriminator": {
@@ -18,8 +9,10 @@
             "run_failed": "#/components/schemas/RunFailedEvent",
             "run_started": "#/components/schemas/RunStartedEvent",
             "text_delta": "#/components/schemas/TextDeltaEvent",
+            "thinking_delta": "#/components/schemas/ThinkingDeltaEvent",
             "tool_finished": "#/components/schemas/ToolFinishedEvent",
-            "tool_started": "#/components/schemas/ToolStartedEvent"
+            "tool_started": "#/components/schemas/ToolStartedEvent",
+            "usage_updated": "#/components/schemas/UsageUpdatedEvent"
           },
           "propertyName": "type"
         },
@@ -29,6 +22,12 @@
           },
           {
             "$ref": "#/components/schemas/TextDeltaEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ThinkingDeltaEvent"
+          },
+          {
+            "$ref": "#/components/schemas/UsageUpdatedEvent"
           },
           {
             "$ref": "#/components/schemas/RunCompletedEvent"
@@ -46,7 +45,7 @@
         "title": "ChatEvent"
       },
       "ChatRunRequest": {
-        "description": "Send one user message. The agent is fixed per conversation; model and reasoning may\nchange from message to message.",
+        "description": "Send one user message. Model and reasoning may change from message to message.",
         "properties": {
           "content": {
             "maxLength": 20000,
@@ -72,10 +71,6 @@
       "ConversationCreate": {
         "description": "Start an empty conversation. Its first message gives it a title.",
         "properties": {
-          "agent": {
-            "$ref": "#/components/schemas/AgentKind",
-            "default": "inbox"
-          },
           "model": {
             "$ref": "#/components/schemas/ModelChoice",
             "default": "sonnet"
@@ -90,10 +85,6 @@
       },
       "ConversationDetail": {
         "properties": {
-          "agent": {
-            "$ref": "#/components/schemas/AgentKind",
-            "default": "inbox"
-          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -124,7 +115,6 @@
           }
         },
         "required": [
-          "agent",
           "model",
           "reasoning",
           "id",
@@ -137,10 +127,6 @@
       },
       "ConversationSummary": {
         "properties": {
-          "agent": {
-            "$ref": "#/components/schemas/AgentKind",
-            "default": "inbox"
-          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -164,7 +150,6 @@
           }
         },
         "required": [
-          "agent",
           "model",
           "reasoning",
           "id",
@@ -257,9 +242,50 @@
             "title": "Createdat",
             "type": "string"
           },
+          "durationMs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationms"
+          },
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "parts": {
+            "anyOf": [
+              {
+                "items": {
+                  "discriminator": {
+                    "mapping": {
+                      "note": "#/components/schemas/TextPart",
+                      "text": "#/components/schemas/TextPart",
+                      "thinking": "#/components/schemas/TextPart",
+                      "tool": "#/components/schemas/ToolPart"
+                    },
+                    "propertyName": "type"
+                  },
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TextPart"
+                    },
+                    {
+                      "$ref": "#/components/schemas/ToolPart"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parts"
           },
           "role": {
             "enum": [
@@ -268,12 +294,25 @@
             ],
             "title": "Role",
             "type": "string"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Usage"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "id",
           "role",
           "content",
+          "parts",
+          "durationMs",
+          "usage",
           "createdAt"
         ],
         "title": "MessageRead",
@@ -366,6 +405,10 @@
       },
       "RunCompletedEvent": {
         "properties": {
+          "durationMs": {
+            "title": "Durationms",
+            "type": "integer"
+          },
           "messageId": {
             "title": "Messageid",
             "type": "string"
@@ -391,6 +434,7 @@
         "required": [
           "type",
           "messageId",
+          "durationMs",
           "usage"
         ],
         "title": "RunCompletedEvent",
@@ -466,6 +510,51 @@
         "title": "TextDeltaEvent",
         "type": "object"
       },
+      "TextPart": {
+        "description": "A stretch of Claude's thinking, answer text, or a progress note (text written just\nbefore a tool call).",
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "thinking",
+              "text",
+              "note"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "text"
+        ],
+        "title": "TextPart",
+        "type": "object"
+      },
+      "ThinkingDeltaEvent": {
+        "description": "A piece of Claude's summarized reasoning. It can arrive before the text and again\nbetween pieces of text, around tool calls.",
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "type": {
+            "const": "thinking_delta",
+            "default": "thinking_delta",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "text"
+        ],
+        "title": "ThinkingDeltaEvent",
+        "type": "object"
+      },
       "ToolFinishedEvent": {
         "properties": {
           "agent": {
@@ -501,6 +590,56 @@
         "title": "ToolFinishedEvent",
         "type": "object"
       },
+      "ToolPart": {
+        "description": "A tool Claude called while replying.",
+        "properties": {
+          "agent": {
+            "title": "Agent",
+            "type": "string"
+          },
+          "durationMs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Durationms"
+          },
+          "ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ok"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          },
+          "type": {
+            "const": "tool",
+            "default": "tool",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "agent",
+          "tool",
+          "ok",
+          "durationMs"
+        ],
+        "title": "ToolPart",
+        "type": "object"
+      },
       "ToolStartedEvent": {
         "properties": {
           "agent": {
@@ -527,7 +666,16 @@
         "type": "object"
       },
       "Usage": {
+        "description": "Tokens spent on one message, sub-agents included. `input_tokens` excludes cached\ninput, which is counted in the two cache fields.",
         "properties": {
+          "cacheReadTokens": {
+            "title": "Cachereadtokens",
+            "type": "integer"
+          },
+          "cacheWriteTokens": {
+            "title": "Cachewritetokens",
+            "type": "integer"
+          },
           "inputTokens": {
             "title": "Inputtokens",
             "type": "integer"
@@ -539,9 +687,30 @@
         },
         "required": [
           "inputTokens",
-          "outputTokens"
+          "outputTokens",
+          "cacheReadTokens",
+          "cacheWriteTokens"
         ],
         "title": "Usage",
+        "type": "object"
+      },
+      "UsageUpdatedEvent": {
+        "properties": {
+          "type": {
+            "const": "usage_updated",
+            "default": "usage_updated",
+            "title": "Type",
+            "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/Usage"
+          }
+        },
+        "required": [
+          "type",
+          "usage"
+        ],
+        "title": "UsageUpdatedEvent",
         "type": "object"
       }
     }

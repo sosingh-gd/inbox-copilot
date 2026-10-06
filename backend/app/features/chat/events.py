@@ -11,6 +11,8 @@ from pydantic import Field, RootModel
 
 from app.core.schemas import ApiModel
 
+from .schemas import Usage
+
 
 class RunStartedEvent(ApiModel):
     type: Literal["run_started"] = "run_started"
@@ -23,14 +25,23 @@ class TextDeltaEvent(ApiModel):
     text: str
 
 
-class Usage(ApiModel):
-    input_tokens: int
-    output_tokens: int
+class ThinkingDeltaEvent(ApiModel):
+    """A piece of Claude's summarized reasoning. It can arrive before the text and again
+    between pieces of text, around tool calls."""
+
+    type: Literal["thinking_delta"] = "thinking_delta"
+    text: str
+
+
+class UsageUpdatedEvent(ApiModel):
+    type: Literal["usage_updated"] = "usage_updated"
+    usage: Usage
 
 
 class RunCompletedEvent(ApiModel):
     type: Literal["run_completed"] = "run_completed"
     message_id: str
+    duration_ms: int
     usage: Usage | None = None
 
 
@@ -57,6 +68,8 @@ class ToolFinishedEvent(ApiModel):
 ChatEventUnion = Annotated[
     RunStartedEvent
     | TextDeltaEvent
+    | ThinkingDeltaEvent
+    | UsageUpdatedEvent
     | RunCompletedEvent
     | RunFailedEvent
     | ToolStartedEvent

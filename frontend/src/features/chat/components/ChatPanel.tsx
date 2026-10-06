@@ -20,7 +20,6 @@ export function ChatPanel({ conversationId, onConversationCreated, userInitial }
     <ChatComposer
       canSend={chat.canSend}
       draft={chat.draft}
-      isAgentLocked={chat.isAgentLocked}
       onDraftChange={chat.setDraft}
       onSend={chat.send}
       onSettingChange={chat.changeSetting}
@@ -55,21 +54,16 @@ export function ChatPanel({ conversationId, onConversationCreated, userInitial }
   return (
     <>
       <ConversationHeader
-        agent={chat.settings.agent}
         isReplying={chat.isReplying}
         title={chat.title ?? ''}
+        usage={chat.totalUsage}
       />
       {chat.isLoading ? (
         <div className="grid flex-1 place-items-center text-ink-muted">
           <Spinner label="Loading conversation" />
         </div>
       ) : (
-        <MessageList
-          error={chat.error}
-          isTyping={chat.isTyping}
-          messages={chat.messages}
-          userInitial={userInitial}
-        />
+        <MessageList error={chat.error} messages={chat.messages} userInitial={userInitial} />
       )}
       <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-4 sm:px-8">
         <div className="mx-auto w-full max-w-3xl">{composer}</div>

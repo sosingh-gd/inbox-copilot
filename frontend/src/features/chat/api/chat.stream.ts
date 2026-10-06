@@ -2,16 +2,31 @@
 import { createParser } from 'eventsource-parser';
 import { env } from '@/config/env';
 import { ApiError, defaultHeaders } from '@/lib/http';
-import type { ChatEvent, ChatRunRequest } from '../types';
+import type { ChatEvent, ChatRunRequest, Usage } from '../types';
+
+interface StreamHandlers {
+  signal: AbortSignal;
+  /** A piece of Claude's reply. */
+  onText: (text: string) => void;
+  /** A piece of Claude's summarized reasoning. */
+  onThinking: (text: string) => void;
+  /** Running token totals for this message, sub-agents included. */
+  onUsage: (usage: Usage) => void;
+  /** Claude called a tool; the reply continues once `onToolFinished` follows. */
+  onToolStarted: (agent: string, tool: string) => void;
+  onToolFinished: (tool: string, ok: boolean, durationMs: number) => void;
+  /** The reply is saved; `durationMs` is how long the server took. */
+  onCompleted: (durationMs: number) => void;
+}
 
 /**
- * Sends one message and calls `onText` with each piece of Claude's reply as it arrives.
+ * Sends one message and calls the handlers as Claude's thinking, reply and token totals arrive.
  * Resolves when the reply is complete; throws if it fails or the connection drops.
  */
 export async function streamChatRun(
   conversationId: string,
   body: ChatRunRequest,
-  options: { signal: AbortSignal; onText: (text: string) => void },
+  options: StreamHandlers,
 ): Promise<void> {
   const url = `${env.apiBaseUrl}/api/v1/chat/conversations/${encodeURIComponent(conversationId)}/stream`;
   const res = await fetch(url, {
@@ -31,6 +46,12 @@ export async function streamChatRun(
       const event = JSON.parse(message.data) as ChatEvent;
       lastEvent = event;
       if (event.type === 'text_delta') options.onText(event.text);
+      else if (event.type === 'thinking_delta') options.onThinking(event.text);
+      else if (event.type === 'usage_updated') options.onUsage(event.usage);
+      else if (event.type === 'tool_started') options.onToolStarted(event.agent, event.tool);
+      else if (event.type === 'tool_finished') {
+        options.onToolFinished(event.tool, event.ok, event.durationMs);
+      } else if (event.type === 'run_completed') options.onCompleted(event.durationMs);
     },
   });
 

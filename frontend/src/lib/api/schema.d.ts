@@ -138,19 +138,13 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
-         * AgentKind
-         * @enum {string}
-         */
-        AgentKind: "inbox" | "calendar" | "general";
-        /**
          * ChatEvent
          * @description Every SSE `data:` payload on the chat stream is one of these.
          */
-        ChatEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["RunCompletedEvent"] | components["schemas"]["RunFailedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"];
+        ChatEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["ThinkingDeltaEvent"] | components["schemas"]["UsageUpdatedEvent"] | components["schemas"]["RunCompletedEvent"] | components["schemas"]["RunFailedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"];
         /**
          * ChatRunRequest
-         * @description Send one user message. The agent is fixed per conversation; model and reasoning may
-         *     change from message to message.
+         * @description Send one user message. Model and reasoning may change from message to message.
          */
         ChatRunRequest: {
             /** Content */
@@ -165,8 +159,6 @@ export interface components {
          * @description Start an empty conversation. Its first message gives it a title.
          */
         ConversationCreate: {
-            /** @default inbox */
-            agent: components["schemas"]["AgentKind"];
             /** @default sonnet */
             model: components["schemas"]["ModelChoice"];
             /** @default balanced */
@@ -174,8 +166,6 @@ export interface components {
         };
         /** ConversationDetail */
         ConversationDetail: {
-            /** @default inbox */
-            agent: components["schemas"]["AgentKind"];
             /** Id */
             id: string;
             /** Messages */
@@ -194,8 +184,6 @@ export interface components {
         };
         /** ConversationSummary */
         ConversationSummary: {
-            /** @default inbox */
-            agent: components["schemas"]["AgentKind"];
             /** Id */
             id: string;
             /** @default sonnet */
@@ -248,13 +236,18 @@ export interface components {
              * Format: date-time
              */
             createdAt: string;
+            /** Durationms */
+            durationMs: number | null;
             /** Id */
             id: string;
+            /** Parts */
+            parts: (components["schemas"]["TextPart"] | components["schemas"]["ToolPart"])[] | null;
             /**
              * Role
              * @enum {string}
              */
             role: "user" | "assistant";
+            usage: components["schemas"]["Usage"] | null;
         };
         /**
          * ModelChoice
@@ -288,6 +281,8 @@ export interface components {
         ReasoningLevel: "fast" | "balanced" | "deep";
         /** RunCompletedEvent */
         RunCompletedEvent: {
+            /** Durationms */
+            durationMs: number;
             /** Messageid */
             messageId: string;
             /**
@@ -332,6 +327,34 @@ export interface components {
              */
             type: "text_delta";
         };
+        /**
+         * TextPart
+         * @description A stretch of Claude's thinking, answer text, or a progress note (text written just
+         *     before a tool call).
+         */
+        TextPart: {
+            /** Text */
+            text: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "note" | "text" | "thinking";
+        };
+        /**
+         * ThinkingDeltaEvent
+         * @description A piece of Claude's summarized reasoning. It can arrive before the text and again
+         *     between pieces of text, around tool calls.
+         */
+        ThinkingDeltaEvent: {
+            /** Text */
+            text: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "thinking_delta";
+        };
         /** ToolFinishedEvent */
         ToolFinishedEvent: {
             /** Agent */
@@ -348,6 +371,25 @@ export interface components {
              */
             type: "tool_finished";
         };
+        /**
+         * ToolPart
+         * @description A tool Claude called while replying.
+         */
+        ToolPart: {
+            /** Agent */
+            agent: string;
+            /** Durationms */
+            durationMs: number | null;
+            /** Ok */
+            ok: boolean | null;
+            /** Tool */
+            tool: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool";
+        };
         /** ToolStartedEvent */
         ToolStartedEvent: {
             /** Agent */
@@ -360,12 +402,29 @@ export interface components {
              */
             type: "tool_started";
         };
-        /** Usage */
+        /**
+         * Usage
+         * @description Tokens spent on one message, sub-agents included. `input_tokens` excludes cached
+         *     input, which is counted in the two cache fields.
+         */
         Usage: {
+            /** Cachereadtokens */
+            cacheReadTokens: number;
+            /** Cachewritetokens */
+            cacheWriteTokens: number;
             /** Inputtokens */
             inputTokens: number;
             /** Outputtokens */
             outputTokens: number;
+        };
+        /** UsageUpdatedEvent */
+        UsageUpdatedEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "usage_updated";
+            usage: components["schemas"]["Usage"];
         };
     };
     responses: never;

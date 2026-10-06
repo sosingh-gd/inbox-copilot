@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from 'react';
 import { errorMessage } from '@/lib/http';
 import { chatApi, chatKeys, useConversationQuery } from '../api/chat.api';
 import { streamChatRun } from '../api/chat.stream';
-import { DEFAULT_SETTINGS } from '../constants';
+import { DEFAULT_SETTINGS, LIVE_REPLY_ID } from '../constants';
 import type { ChatMessage, ChatSettings, ConversationDetail } from '../types';
-import { settingsOf } from '../utils';
+import { appendToParts, finishToolPart, settingsOf, startToolPart, totalUsageOf } from '../utils';
 
 /**
  * Everything the chat panel needs for one conversation, or for a new chat when
@@ -13,8 +13,10 @@ import { settingsOf } from '../utils';
  *
  * How sending works:
  * 1. A new chat first creates its conversation on the server.
- * 2. The user's message and Claude's reply (as it streams in) are written straight into the
- *    cached conversation, so the screen always reads messages from one place.
+ * 2. The user's message and an empty reply are added to the cached conversation straight away,
+ *    and the reply fills in as its parts (thinking, notes, tool calls, text) and its token
+ *    counts stream in. The screen always
+ *    reads messages from one place.
  * 3. When the reply ends, the conversation is refetched and the saved messages replace the
  *    temporary ones.
  */
@@ -34,7 +36,6 @@ export function useChat(
   const [chosenSettings, setChosenSettings] = useState<ChatSettings | null>(null);
   const settings =
     chosenSettings ?? (conversation.data ? settingsOf(conversation.data) : DEFAULT_SETTINGS);
-  const isAgentLocked = activeId !== undefined; // the agent can't change once a chat exists
 
   const [draft, setDraft] = useState('');
   const [isReplying, setIsReplying] = useState(false);
@@ -45,10 +46,8 @@ export function useChat(
   useEffect(() => () => abortRef.current?.abort(), []);
 
   const messages = conversation.data?.messages ?? [];
-  const lastMessage = messages.at(-1);
 
   function changeSetting<K extends keyof ChatSettings>(name: K, value: ChatSettings[K]) {
-    if (name === 'agent' && isAgentLocked) return;
     setChosenSettings({ ...settings, [name]: value });
   }
 
@@ -56,6 +55,14 @@ export function useChat(
     queryClient.setQueryData<ConversationDetail>(chatKeys.detail(id), (cached) =>
       cached ? { ...cached, messages: update(cached.messages) } : cached,
     );
+  }
+
+  /** Changes the reply in progress, which is always the last cached message while streaming. */
+  function updateReply(id: string, change: (reply: ChatMessage) => ChatMessage) {
+    updateCachedMessages(id, (current) => {
+      const last = current.at(-1);
+      return last?.id === LIVE_REPLY_ID ? [...current.slice(0, -1), change(last)] : current;
+    });
   }
 
   async function send() {
@@ -86,6 +93,7 @@ export function useChat(
       updateCachedMessages(conversationKey, (current) => [
         ...current,
         temporaryMessage('user', content),
+        temporaryMessage('assistant', ''), // shows its timer until the first words arrive
       ]);
 
       await streamChatRun(
@@ -94,7 +102,29 @@ export function useChat(
         {
           signal: controller.signal,
           onText: (text) =>
-            updateCachedMessages(conversationKey, (current) => appendToReply(current, text)),
+            updateReply(conversationKey, (reply) => ({
+              ...reply,
+              content: reply.content + text,
+              parts: appendToParts(reply.parts ?? [], 'text', text),
+            })),
+          onThinking: (text) =>
+            updateReply(conversationKey, (reply) => ({
+              ...reply,
+              parts: appendToParts(reply.parts ?? [], 'thinking', text),
+            })),
+          onToolStarted: (agent, tool) =>
+            updateReply(conversationKey, (reply) => ({
+              ...reply,
+              parts: startToolPart(reply.parts ?? [], agent, tool),
+            })),
+          onToolFinished: (tool, ok, durationMs) =>
+            updateReply(conversationKey, (reply) => ({
+              ...reply,
+              parts: finishToolPart(reply.parts ?? [], tool, ok, durationMs),
+            })),
+          onUsage: (usage) => updateReply(conversationKey, (reply) => ({ ...reply, usage })),
+          onCompleted: (durationMs) =>
+            updateReply(conversationKey, (reply) => ({ ...reply, durationMs })),
         },
       );
       succeeded = true;
@@ -122,11 +152,10 @@ export function useChat(
     isLoading: conversation.isLoading,
     loadError: conversation.error,
     messages,
-    isTyping: isReplying && lastMessage?.role === 'user', // waiting for the first words
+    totalUsage: totalUsageOf(messages),
     isReplying,
     error,
     settings,
-    isAgentLocked,
     changeSetting,
     draft,
     setDraft,
@@ -135,18 +164,15 @@ export function useChat(
   };
 }
 
-const TEMPORARY_REPLY_ID = 'temporary-reply';
-
 function temporaryMessage(role: ChatMessage['role'], content: string): ChatMessage {
-  const id = role === 'user' ? 'temporary-user' : TEMPORARY_REPLY_ID;
-  return { id, role, content, createdAt: new Date().toISOString() };
-}
-
-/** Adds streamed text to the reply in progress, starting it on the first piece of text. */
-function appendToReply(messages: ChatMessage[], text: string): ChatMessage[] {
-  const last = messages.at(-1);
-  if (last?.id === TEMPORARY_REPLY_ID) {
-    return [...messages.slice(0, -1), { ...last, content: last.content + text }];
-  }
-  return [...messages, temporaryMessage('assistant', text)];
+  const id = role === 'user' ? 'temporary-user' : LIVE_REPLY_ID;
+  return {
+    id,
+    role,
+    content,
+    parts: role === 'assistant' ? [] : null,
+    durationMs: null, // a reply without a duration is still running
+    usage: null,
+    createdAt: new Date().toISOString(),
+  };
 }

@@ -6,7 +6,6 @@ from app.core.security import require_csrf_header
 from app.features.auth.router import router as auth_router
 from app.features.chat.router import router as chat_router
 
-
 api_router = APIRouter(
     prefix="/api/v1",
     responses=COMMON_ERROR_RESPONSES,

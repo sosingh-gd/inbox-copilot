@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from fastapi import APIRouter, Request, status
 
 from app.api.deps import CurrentUser
+from app.core.logging import set_log_context
 from app.core.sse import EventStreamResponse, format_sse, with_heartbeat
 
 from .deps import ChatServiceDep
@@ -61,10 +62,14 @@ def stream_chat_run(
     turn = service.start_turn(user.id, conversation_id, body)
 
     async def events() -> AsyncIterator[str]:
+        # Set before streaming starts: with_heartbeat runs each step in a new task, and those
+        # tasks copy this context, so every line about this message (sub-agents too) is tagged.
+        set_log_context(conv=turn.conversation_id, msg=turn.user_message_id)
         seq = 0
         try:
             async for item in with_heartbeat(service.stream_reply(turn), interval=15):
                 if await request.is_disconnected():
+                    logger.info("client_disconnected stopping stream after events=%d", seq)
                     break
                 if isinstance(item, str):  # heartbeat comment
                     yield item

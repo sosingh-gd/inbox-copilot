@@ -1,7 +1,8 @@
-import type { ChatSettings } from './types';
+import { LIVE_REPLY_ID } from './constants';
+import type { ChatMessage, ChatSettings, MessagePart, Usage } from './types';
 
 export function settingsOf(source: ChatSettings): ChatSettings {
-  return { agent: source.agent, model: source.model, reasoning: source.reasoning };
+  return { model: source.model, reasoning: source.reasoning };
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -19,4 +20,85 @@ export function formatUpdatedAt(iso: string, now: Date = new Date()): string {
   if (time >= startOfToday - DAY_MS) return 'Yesterday';
   if (time >= startOfToday - 6 * DAY_MS) return date.toLocaleDateString([], { weekday: 'short' });
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+/** "4.2s" under a minute, "1m 05s" after. */
+export function formatDuration(ms: number): string {
+  const seconds = ms / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const whole = Math.floor(seconds);
+  return `${Math.floor(whole / 60)}m ${String(whole % 60).padStart(2, '0')}s`;
+}
+
+export function formatCount(count: number): string {
+  return count.toLocaleString();
+}
+
+/** All input tokens: Anthropic counts cached input apart from `inputTokens`. */
+export function inputTokensOf(usage: Usage): number {
+  return usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
+}
+
+export function totalTokensOf(usage: Usage): number {
+  return inputTokensOf(usage) + usage.outputTokens;
+}
+
+/** The conversation's token totals so far, including a reply that is still streaming. */
+export function totalUsageOf(messages: ChatMessage[]): Usage | null {
+  const usages = messages.flatMap((message) => (message.usage ? [message.usage] : []));
+  if (usages.length === 0) return null;
+  return usages.reduce((total, usage) => ({
+    inputTokens: total.inputTokens + usage.inputTokens,
+    outputTokens: total.outputTokens + usage.outputTokens,
+    cacheReadTokens: total.cacheReadTokens + usage.cacheReadTokens,
+    cacheWriteTokens: total.cacheWriteTokens + usage.cacheWriteTokens,
+  }));
+}
+
+/** True for the reply that is still streaming in. */
+export function isLiveReply(message: ChatMessage): boolean {
+  return message.id === LIVE_REPLY_ID;
+}
+
+/**
+ * Adds a streamed piece of thinking or text: it extends the last part when that is the same
+ * kind, and starts a new part when Claude switches between thinking and writing.
+ */
+export function appendToParts(
+  parts: MessagePart[],
+  type: 'thinking' | 'text',
+  text: string,
+): MessagePart[] {
+  const last = parts.at(-1);
+  return last?.type === type
+    ? [...parts.slice(0, -1), { type, text: last.text + text }]
+    : [...parts, { type, text }];
+}
+
+/**
+ * Adds a running tool call. Text written just before it was progress ("I'll check your
+ * calendar"), so it becomes a note; the server stores it the same way.
+ */
+export function startToolPart(parts: MessagePart[], agent: string, tool: string): MessagePart[] {
+  const last = parts.at(-1);
+  const earlier =
+    last?.type === 'text' ? [...parts.slice(0, -1), { ...last, type: 'note' as const }] : parts;
+  return [...earlier, { type: 'tool', agent, tool, ok: null, durationMs: null }];
+}
+
+/** Marks the running call of `tool` as finished. */
+export function finishToolPart(
+  parts: MessagePart[],
+  tool: string,
+  ok: boolean,
+  durationMs: number,
+): MessagePart[] {
+  const index = parts.findLastIndex((part) => part.type === 'tool' && part.tool === tool);
+  return parts.map((part, i) => (i === index ? { ...part, ok, durationMs } : part));
+}
+
+/** "ask_calendar_agent" -> "Asked the calendar agent"; other tools keep their own name. */
+export function toolLabel(tool: string): string {
+  const agent = /^ask_(.+)_agent$/.exec(tool)?.[1];
+  return agent ? `Asked the ${agent.replaceAll('_', ' ')} agent` : tool.replaceAll('_', ' ');
 }
