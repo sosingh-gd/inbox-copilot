@@ -40,8 +40,27 @@ class RunFailedEvent(ApiModel):
     message: str
 
 
+class ToolStartedEvent(ApiModel):
+    type: Literal["tool_started"] = "tool_started"
+    agent: str
+    tool: str
+
+
+class ToolFinishedEvent(ApiModel):
+    type: Literal["tool_finished"] = "tool_finished"
+    agent: str
+    tool: str
+    ok: bool
+    duration_ms: int
+
+
 ChatEventUnion = Annotated[
-    RunStartedEvent | TextDeltaEvent | RunCompletedEvent | RunFailedEvent,
+    RunStartedEvent
+    | TextDeltaEvent
+    | RunCompletedEvent
+    | RunFailedEvent
+    | ToolStartedEvent
+    | ToolFinishedEvent,
     Field(discriminator="type"),
 ]
 

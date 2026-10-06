@@ -1,16 +1,28 @@
 import asyncio
+import logging
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
+from typing import Literal
 
+from anthropic.types import MessageParam
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.agents.events import RunFinished, TextDelta, ToolFinished, ToolStarted
+from app.agents.models import AgentError
+from app.agents.registry import AgentRegistry
 from app.core.errors import NotFoundError
 from app.core.schemas import ApiModel
 
-from .events import RunCompletedEvent, RunFailedEvent, RunStartedEvent, TextDeltaEvent, Usage
-from .llm import ChatModel, Completion, LlmError, LlmMessage, TextChunk
+from .events import (
+    RunCompletedEvent,
+    RunFailedEvent,
+    RunStartedEvent,
+    TextDeltaEvent,
+    ToolFinishedEvent,
+    ToolStartedEvent,
+    Usage,
+)
 from .models import ChatMessage, Conversation
-from .prompts import system_prompt
 from .repository import ChatRepository
 from .schemas import (
     AgentKind,
@@ -22,8 +34,22 @@ from .schemas import (
     ReasoningLevel,
 )
 
+logger = logging.getLogger(__name__)
+
 TITLE_LENGTH = 60
 NEW_CONVERSATION_TITLE = "New conversation"
+
+AGENT_NAMES = {
+    AgentKind.inbox: "email",
+    AgentKind.calendar: "calendar",
+    AgentKind.general: "general",
+}
+
+
+@dataclass(frozen=True)
+class LlmMessage:
+    role: Literal["user", "assistant"]
+    content: str
 
 
 @dataclass(frozen=True)
@@ -42,11 +68,11 @@ class ChatService:
     def __init__(
         self,
         repo: ChatRepository,
-        llm: ChatModel,
+        agents: AgentRegistry,
         new_session: sessionmaker[Session],
     ) -> None:
         self.repo = repo
-        self.llm = llm
+        self.agents = agents
         # Streams outlive the request, so writes after streaming use their own short session.
         self.new_session = new_session
 
@@ -99,39 +125,49 @@ class ChatService:
             conversation_id=turn.conversation_id, user_message_id=turn.user_message_id
         )
 
-        parts: list[str] = []
-        completion: Completion | None = None
+        history: list[MessageParam] = [
+            {"role": m.role, "content": m.content} for m in _merge_consecutive(turn.history)
+        ]
+        finished: RunFinished | None = None
+        # The requested model/reasoning are saved on the conversation; each agent picks its own model.
+        logger.info(
+            "chat run conversation=%s agent=%s requested_model=%s reasoning=%s history_messages=%d",
+            turn.conversation_id,
+            AGENT_NAMES[turn.agent],
+            turn.model.value,
+            turn.reasoning.value,
+            len(history),
+        )
         try:
-            async for event in self.llm.stream(
-                system=system_prompt(turn.agent),
-                messages=_merge_consecutive(turn.history),
-                model=turn.model,
-                reasoning=turn.reasoning,
-            ):
-                if isinstance(event, TextChunk):
-                    parts.append(event.text)
-                    yield TextDeltaEvent(text=event.text)
-                else:
-                    completion = event
-        except LlmError as exc:
+            async for event in self.agents.stream(AGENT_NAMES[turn.agent], history):
+                match event:
+                    case TextDelta(text=text):
+                        yield TextDeltaEvent(text=text)
+                    case ToolStarted(agent=agent, tool=tool):
+                        yield ToolStartedEvent(agent=agent, tool=tool)
+                    case ToolFinished(agent=agent, tool=tool, ok=ok, duration_ms=duration_ms):
+                        yield ToolFinishedEvent(
+                            agent=agent, tool=tool, ok=ok, duration_ms=duration_ms
+                        )
+                    case RunFinished():
+                        finished = event
+        except AgentError as exc:
+            logger.warning(
+                "chat run failed conversation=%s code=%s", turn.conversation_id, exc.code
+            )
             yield RunFailedEvent(code=exc.code, message=exc.message)
             return
 
-        if completion is None:
+        if finished is None:
             yield RunFailedEvent(code="incomplete", message="The reply ended unexpectedly.")
-            return
-        if completion.refused:
-            yield RunFailedEvent(code="refused", message="Claude declined to answer this request.")
             return
 
         message_id = await asyncio.to_thread(
-            self._save_assistant_message, turn.conversation_id, "".join(parts)
+            self._save_assistant_message, turn.conversation_id, finished.text
         )
         yield RunCompletedEvent(
             message_id=message_id,
-            usage=Usage(
-                input_tokens=completion.input_tokens, output_tokens=completion.output_tokens
-            ),
+            usage=Usage(input_tokens=finished.input_tokens, output_tokens=finished.output_tokens),
         )
 
     def _owned_conversation(self, user_id: int, conversation_id: str) -> Conversation:

@@ -58,26 +58,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/calendar/events": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Calendar Events
-         * @description Upcoming events on the signed-in user's primary calendar.
-         */
-        get: operations["list_calendar_events"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/chat/conversations": {
         parameters: {
             query?: never;
@@ -136,26 +116,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/emails": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * List Emails
-         * @description Most recent messages in the signed-in user's mailbox (metadata and snippet only).
-         */
-        get: operations["list_emails"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -182,24 +142,11 @@ export interface components {
          * @enum {string}
          */
         AgentKind: "inbox" | "calendar" | "general";
-        /** CalendarEvent */
-        CalendarEvent: {
-            /** End */
-            end: string | null;
-            /** Id */
-            id: string;
-            /** Location */
-            location: string;
-            /** Start */
-            start: string | null;
-            /** Summary */
-            summary: string;
-        };
         /**
          * ChatEvent
          * @description Every SSE `data:` payload on the chat stream is one of these.
          */
-        ChatEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["RunCompletedEvent"] | components["schemas"]["RunFailedEvent"];
+        ChatEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["RunCompletedEvent"] | components["schemas"]["RunFailedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"];
         /**
          * ChatRunRequest
          * @description Send one user message. The agent is fixed per conversation; model and reasoning may
@@ -269,19 +216,6 @@ export interface components {
             email: string;
             /** Scopes */
             scopes: string[];
-        };
-        /** EmailSummary */
-        EmailSummary: {
-            /** Date */
-            date: string;
-            /** Id */
-            id: string;
-            /** Sender */
-            sender: string;
-            /** Snippet */
-            snippet: string;
-            /** Subject */
-            subject: string;
         };
         /** FieldError */
         FieldError: {
@@ -397,6 +331,34 @@ export interface components {
              * @enum {string}
              */
             type: "text_delta";
+        };
+        /** ToolFinishedEvent */
+        ToolFinishedEvent: {
+            /** Agent */
+            agent: string;
+            /** Durationms */
+            durationMs: number;
+            /** Ok */
+            ok: boolean;
+            /** Tool */
+            tool: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool_finished";
+        };
+        /** ToolStartedEvent */
+        ToolStartedEvent: {
+            /** Agent */
+            agent: string;
+            /** Tool */
+            tool: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "tool_started";
         };
         /** Usage */
         Usage: {
@@ -639,110 +601,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CurrentUserRead"];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                    "application/problem+json": unknown;
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                    "application/problem+json": unknown;
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                    "application/problem+json": unknown;
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                    "application/problem+json": unknown;
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                    "application/problem+json": unknown;
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                    "application/problem+json": unknown;
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                    "application/problem+json": unknown;
-                };
-            };
-            /** @description Bad Gateway */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                    "application/problem+json": unknown;
-                };
-            };
-        };
-    };
-    list_calendar_events: {
-        parameters: {
-            query?: {
-                days?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                inbox_copilot_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CalendarEvent"][];
                 };
             };
             /** @description Bad Request */
@@ -1243,110 +1101,6 @@ export interface operations {
                 content: {
                     "application/problem+json": unknown;
                     "text/event-stream": components["schemas"]["ProblemDetail"];
-                };
-            };
-        };
-    };
-    list_emails: {
-        parameters: {
-            query?: {
-                maxResults?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                inbox_copilot_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EmailSummary"][];
-                };
-            };
-            /** @description Bad Request */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                    "application/problem+json": unknown;
-                };
-            };
-            /** @description Unauthorized */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                    "application/problem+json": unknown;
-                };
-            };
-            /** @description Forbidden */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                    "application/problem+json": unknown;
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                    "application/problem+json": unknown;
-                };
-            };
-            /** @description Conflict */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                    "application/problem+json": unknown;
-                };
-            };
-            /** @description Unprocessable Entity */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                    "application/problem+json": unknown;
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                    "application/problem+json": unknown;
-                };
-            };
-            /** @description Bad Gateway */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ProblemDetail"];
-                    "application/problem+json": unknown;
                 };
             };
         };

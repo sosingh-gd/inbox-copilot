@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -35,6 +36,11 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     # Empty = same-origin deployment (Vite proxy in dev, reverse proxy in prod).
     cors_origins: list[str] = []
+
+    # Weather (Open-Meteo, no API key). Used when a question names no place.
+    weather_home_location: str = "Berlin"
+    weather_timezone: str = "Europe/Berlin"
+    weather_units: Literal["metric", "imperial"] = "metric"
 
 
 @lru_cache

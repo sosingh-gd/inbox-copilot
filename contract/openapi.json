@@ -10,53 +10,6 @@
         "title": "AgentKind",
         "type": "string"
       },
-      "CalendarEvent": {
-        "properties": {
-          "end": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "End"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "location": {
-            "title": "Location",
-            "type": "string"
-          },
-          "start": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Start"
-          },
-          "summary": {
-            "title": "Summary",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "summary",
-          "start",
-          "end",
-          "location"
-        ],
-        "title": "CalendarEvent",
-        "type": "object"
-      },
       "ChatEvent": {
         "description": "Every SSE `data:` payload on the chat stream is one of these.",
         "discriminator": {
@@ -64,7 +17,9 @@
             "run_completed": "#/components/schemas/RunCompletedEvent",
             "run_failed": "#/components/schemas/RunFailedEvent",
             "run_started": "#/components/schemas/RunStartedEvent",
-            "text_delta": "#/components/schemas/TextDeltaEvent"
+            "text_delta": "#/components/schemas/TextDeltaEvent",
+            "tool_finished": "#/components/schemas/ToolFinishedEvent",
+            "tool_started": "#/components/schemas/ToolStartedEvent"
           },
           "propertyName": "type"
         },
@@ -80,6 +35,12 @@
           },
           {
             "$ref": "#/components/schemas/RunFailedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ToolStartedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ToolFinishedEvent"
           }
         ],
         "title": "ChatEvent"
@@ -232,39 +193,6 @@
           "scopes"
         ],
         "title": "CurrentUserRead",
-        "type": "object"
-      },
-      "EmailSummary": {
-        "properties": {
-          "date": {
-            "title": "Date",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "sender": {
-            "title": "Sender",
-            "type": "string"
-          },
-          "snippet": {
-            "title": "Snippet",
-            "type": "string"
-          },
-          "subject": {
-            "title": "Subject",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "sender",
-          "subject",
-          "date",
-          "snippet"
-        ],
-        "title": "EmailSummary",
         "type": "object"
       },
       "FieldError": {
@@ -536,6 +464,66 @@
           "text"
         ],
         "title": "TextDeltaEvent",
+        "type": "object"
+      },
+      "ToolFinishedEvent": {
+        "properties": {
+          "agent": {
+            "title": "Agent",
+            "type": "string"
+          },
+          "durationMs": {
+            "title": "Durationms",
+            "type": "integer"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          },
+          "type": {
+            "const": "tool_finished",
+            "default": "tool_finished",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "agent",
+          "tool",
+          "ok",
+          "durationMs"
+        ],
+        "title": "ToolFinishedEvent",
+        "type": "object"
+      },
+      "ToolStartedEvent": {
+        "properties": {
+          "agent": {
+            "title": "Agent",
+            "type": "string"
+          },
+          "tool": {
+            "title": "Tool",
+            "type": "string"
+          },
+          "type": {
+            "const": "tool_started",
+            "default": "tool_started",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "agent",
+          "tool"
+        ],
+        "title": "ToolStartedEvent",
         "type": "object"
       },
       "Usage": {
@@ -940,150 +928,6 @@
         "summary": "Read Current User",
         "tags": [
           "auth"
-        ]
-      }
-    },
-    "/api/v1/calendar/events": {
-      "get": {
-        "description": "Upcoming events on the signed-in user's primary calendar.",
-        "operationId": "list_calendar_events",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "days",
-            "required": false,
-            "schema": {
-              "default": 7,
-              "maximum": 365,
-              "minimum": 1,
-              "title": "Days",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "inbox_copilot_session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Inbox Copilot Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CalendarEvent"
-                  },
-                  "title": "Response List Calendar Events",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/problem+json": {}
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/problem+json": {}
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/problem+json": {}
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/problem+json": {}
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/problem+json": {}
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/problem+json": {}
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/problem+json": {}
-            },
-            "description": "Internal Server Error"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/problem+json": {}
-            },
-            "description": "Bad Gateway"
-          }
-        },
-        "summary": "List Calendar Events",
-        "tags": [
-          "calendar"
         ]
       }
     },
@@ -1634,150 +1478,6 @@
         "summary": "Stream Chat Run",
         "tags": [
           "chat"
-        ]
-      }
-    },
-    "/api/v1/emails": {
-      "get": {
-        "description": "Most recent messages in the signed-in user's mailbox (metadata and snippet only).",
-        "operationId": "list_emails",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "maxResults",
-            "required": false,
-            "schema": {
-              "default": 10,
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Maxresults",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "inbox_copilot_session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Inbox Copilot Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/EmailSummary"
-                  },
-                  "title": "Response List Emails",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/problem+json": {}
-            },
-            "description": "Bad Request"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/problem+json": {}
-            },
-            "description": "Unauthorized"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/problem+json": {}
-            },
-            "description": "Forbidden"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/problem+json": {}
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/problem+json": {}
-            },
-            "description": "Conflict"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/problem+json": {}
-            },
-            "description": "Unprocessable Entity"
-          },
-          "500": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/problem+json": {}
-            },
-            "description": "Internal Server Error"
-          },
-          "502": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              },
-              "application/problem+json": {}
-            },
-            "description": "Bad Gateway"
-          }
-        },
-        "summary": "List Emails",
-        "tags": [
-          "emails"
         ]
       }
     },

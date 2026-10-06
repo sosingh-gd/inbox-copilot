@@ -1,10 +1,11 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from anthropic import AsyncAnthropic
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 
+from app.agents.runner import AgentRunner
 from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
@@ -19,12 +20,13 @@ def operation_id(route: APIRoute) -> str:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     settings = get_settings()
     configure_logging(settings.log_level)
     init_engine(settings.database_url)
     create_tables()
     app.state.anthropic = AsyncAnthropic(api_key=settings.anthropic_api_key)
+    app.state.agent_runner = AgentRunner(app.state.anthropic)
     yield
     await app.state.anthropic.close()
     dispose_engine()
