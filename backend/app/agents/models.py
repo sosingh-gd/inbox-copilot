@@ -1,11 +1,13 @@
 """Building blocks shared by every agent."""
 
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from anthropic.types import ToolUnionParam, Usage
 from pydantic import BaseModel
+
+from .trace import ModelCall
 
 SONNET = "claude-sonnet-5-5"
 HAIKU = "claude-haiku-4-5"
@@ -44,12 +46,13 @@ class AgentDefinition:
 @dataclass
 class TokenUsage:
     """Tokens spent on one user message, sub-agents included. Every run that works on the
-    message adds to the same instance."""
+    message adds to the same instance, along with a record of each Claude call it made."""
 
     input_tokens: int = 0
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
+    calls: list[ModelCall] = field(default_factory=list)
 
     def add(self, usage: Usage) -> None:
         self.input_tokens += usage.input_tokens

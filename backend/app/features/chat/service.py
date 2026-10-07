@@ -20,6 +20,7 @@ from app.agents.events import (
 )
 from app.agents.models import HAIKU, SONNET, AgentError, Effort
 from app.agents.registry import AgentRegistry
+from app.agents.trace import ModelCall
 from app.core.errors import NotFoundError
 from app.core.schemas import ApiModel
 
@@ -152,6 +153,7 @@ class ChatService:
         ]
         finished: RunFinished | None = None
         usage: Usage | None = None
+        calls: list[ModelCall] = []
         try:
             async for event in self.agents.stream(
                 history, MODEL_IDS[turn.model], EFFORTS[turn.reasoning]
@@ -169,6 +171,7 @@ class ChatService:
                         )
                     case UsageUpdated(usage=totals):
                         usage = Usage.model_validate(totals, from_attributes=True)
+                        calls = totals.calls
                         yield UsageUpdatedEvent(usage=usage)
                     case RunFinished():
                         finished = event
@@ -184,7 +187,12 @@ class ChatService:
 
         duration_ms = int((time.perf_counter() - started) * 1000)
         message_id = await asyncio.to_thread(
-            self._save_assistant_message, turn.conversation_id, finished, duration_ms, usage
+            self._save_assistant_message,
+            turn.conversation_id,
+            finished,
+            duration_ms,
+            usage,
+            calls,
         )
         logger.info(
             "run_completed saved_message=%s duration_ms=%d parts=%s %s",
@@ -202,7 +210,12 @@ class ChatService:
         return conversation
 
     def _save_assistant_message(
-        self, conversation_id: str, finished: RunFinished, duration_ms: int, usage: Usage | None
+        self,
+        conversation_id: str,
+        finished: RunFinished,
+        duration_ms: int,
+        usage: Usage | None,
+        calls: list[ModelCall],
     ) -> str:
         with self.new_session() as session:
             repo = ChatRepository(session)
@@ -214,6 +227,7 @@ class ChatService:
                     parts=[_part_dict(p) for p in finished.parts],
                     duration_ms=duration_ms,
                     usage=usage.model_dump() if usage else None,
+                    calls=[asdict(c) for c in calls],
                 )
             )
             repo.commit()

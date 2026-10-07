@@ -231,8 +231,64 @@
         "title": "HealthRead",
         "type": "object"
       },
+      "InputSection": {
+        "description": "One piece of what a Claude call sent: the system prompt, a tool definition, or a\nblock of a message. `tokens` is an estimate: the call's real input tokens, shared out\nby each section's size.",
+        "properties": {
+          "chars": {
+            "title": "Chars",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "system",
+              "tool_definition",
+              "text",
+              "thinking",
+              "tool_use",
+              "tool_result"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "tokens": {
+            "title": "Tokens",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "text",
+          "chars",
+          "tokens"
+        ],
+        "title": "InputSection",
+        "type": "object"
+      },
       "MessageRead": {
         "properties": {
+          "calls": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ModelCall"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calls"
+          },
           "content": {
             "title": "Content",
             "type": "string"
@@ -313,9 +369,57 @@
           "parts",
           "durationMs",
           "usage",
+          "calls",
           "createdAt"
         ],
         "title": "MessageRead",
+        "type": "object"
+      },
+      "ModelCall": {
+        "description": "One request to Claude while replying, by the orchestrator or a specialist agent.",
+        "properties": {
+          "agent": {
+            "title": "Agent",
+            "type": "string"
+          },
+          "cacheReadTokens": {
+            "title": "Cachereadtokens",
+            "type": "integer"
+          },
+          "inputTokens": {
+            "title": "Inputtokens",
+            "type": "integer"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "outputTokens": {
+            "title": "Outputtokens",
+            "type": "integer"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/InputSection"
+            },
+            "title": "Sections",
+            "type": "array"
+          },
+          "turn": {
+            "title": "Turn",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "agent",
+          "turn",
+          "model",
+          "inputTokens",
+          "cacheReadTokens",
+          "outputTokens",
+          "sections"
+        ],
+        "title": "ModelCall",
         "type": "object"
       },
       "ModelChoice": {

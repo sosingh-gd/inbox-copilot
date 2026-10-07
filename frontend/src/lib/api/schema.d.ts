@@ -227,8 +227,31 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * InputSection
+         * @description One piece of what a Claude call sent: the system prompt, a tool definition, or a
+         *     block of a message. `tokens` is an estimate: the call's real input tokens, shared out
+         *     by each section's size.
+         */
+        InputSection: {
+            /** Chars */
+            chars: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "system" | "tool_definition" | "text" | "thinking" | "tool_use" | "tool_result";
+            /** Label */
+            label: string;
+            /** Text */
+            text: string;
+            /** Tokens */
+            tokens: number;
+        };
         /** MessageRead */
         MessageRead: {
+            /** Calls */
+            calls: components["schemas"]["ModelCall"][] | null;
             /** Content */
             content: string;
             /**
@@ -248,6 +271,26 @@ export interface components {
              */
             role: "user" | "assistant";
             usage: components["schemas"]["Usage"] | null;
+        };
+        /**
+         * ModelCall
+         * @description One request to Claude while replying, by the orchestrator or a specialist agent.
+         */
+        ModelCall: {
+            /** Agent */
+            agent: string;
+            /** Cachereadtokens */
+            cacheReadTokens: number;
+            /** Inputtokens */
+            inputTokens: number;
+            /** Model */
+            model: string;
+            /** Outputtokens */
+            outputTokens: number;
+            /** Sections */
+            sections: components["schemas"]["InputSection"][];
+            /** Turn */
+            turn: number;
         };
         /**
          * ModelChoice

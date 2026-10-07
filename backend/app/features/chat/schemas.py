@@ -68,6 +68,30 @@ class ToolPart(ApiModel):
 MessagePart = Annotated[TextPart | ToolPart, Field(discriminator="type")]
 
 
+class InputSection(ApiModel):
+    """One piece of what a Claude call sent: the system prompt, a tool definition, or a
+    block of a message. `tokens` is an estimate: the call's real input tokens, shared out
+    by each section's size."""
+
+    kind: Literal["system", "tool_definition", "text", "thinking", "tool_use", "tool_result"]
+    label: str
+    text: str  # very long sections are cut short; `chars` is the full length
+    chars: int
+    tokens: int
+
+
+class ModelCall(ApiModel):
+    """One request to Claude while replying, by the orchestrator or a specialist agent."""
+
+    agent: str
+    turn: int
+    model: str
+    input_tokens: int  # all input, cached included
+    cache_read_tokens: int
+    output_tokens: int
+    sections: list[InputSection]
+
+
 class MessageRead(ApiModel):
     id: str
     role: MessageRole
@@ -78,6 +102,8 @@ class MessageRead(ApiModel):
     # Set on assistant messages only: how long the reply took and the tokens it used.
     duration_ms: int | None = None
     usage: Usage | None = None
+    # Assistant messages only: every Claude call made for the reply, with what it sent.
+    calls: list[ModelCall] | None = None
     created_at: AwareDatetime
 
 

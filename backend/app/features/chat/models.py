@@ -42,6 +42,7 @@ class ChatMessage(Base):
     parts: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON)  # schemas.MessagePart dicts
     duration_ms: Mapped[int | None] = mapped_column(Integer)  # assistant replies only
     usage: Mapped[dict[str, int] | None] = mapped_column(JSON)  # a schemas.Usage, as a dict
+    calls: Mapped[list[dict[str, Any]] | None] = mapped_column(JSON)  # schemas.ModelCall dicts
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
 
     conversation: Mapped[Conversation] = relationship(back_populates="messages")

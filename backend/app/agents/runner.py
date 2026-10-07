@@ -30,6 +30,7 @@ from .events import (
     UsageUpdated,
 )
 from .models import HAIKU, AgentDefinition, AgentError, Effort, TokenUsage, Tool
+from .trace import ModelCall, assign_tokens, describe_input
 
 logger = logging.getLogger(__name__)
 
@@ -92,8 +93,10 @@ class AgentRunner:
             len(messages),
         )
 
+        tool_params = [t.to_api() for t in agent.tools]
         for turn in range(1, agent.max_turns + 1):
             turn_started = time.perf_counter()
+            sections = describe_input(agent.system_prompt, tool_params, messages)
             try:
                 async with self._client.messages.stream(
                     model=agent.model,
@@ -101,7 +104,7 @@ class AgentRunner:
                     thinking=thinking,
                     output_config=output_config,
                     system=agent.system_prompt,
-                    tools=[t.to_api() for t in agent.tools],
+                    tools=tool_params,
                     messages=messages,
                 ) as stream:
                     async for event in stream:
@@ -150,6 +153,23 @@ class AgentRunner:
                         )
 
             usage.add(turn_usage)
+            call_input = (
+                turn_usage.input_tokens
+                + (turn_usage.cache_read_input_tokens or 0)
+                + (turn_usage.cache_creation_input_tokens or 0)
+            )
+            assign_tokens(sections, call_input)
+            usage.calls.append(
+                ModelCall(
+                    agent=agent.name,
+                    turn=turn,
+                    model=response.model,
+                    input_tokens=call_input,
+                    cache_read_tokens=turn_usage.cache_read_input_tokens or 0,
+                    output_tokens=turn_usage.output_tokens,
+                    sections=sections,
+                )
+            )
             yield UsageUpdated(replace(usage))  # a copy, since `usage` keeps changing
 
             # Stop runaway loops: tokens are summed across every turn of this run.

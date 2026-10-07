@@ -173,6 +173,7 @@ function temporaryMessage(role: ChatMessage['role'], content: string): ChatMessa
     parts: role === 'assistant' ? [] : null,
     durationMs: null, // a reply without a duration is still running
     usage: null,
+    calls: null,
     createdAt: new Date().toISOString(),
   };
 }

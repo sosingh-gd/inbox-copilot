@@ -14,6 +14,9 @@ export type Usage = Schemas['Usage'];
 export type TextPart = Schemas['TextPart'];
 export type ToolPart = Schemas['ToolPart'];
 export type MessagePart = TextPart | ToolPart;
+export type ModelCall = Schemas['ModelCall'];
+export type InputSection = Schemas['InputSection'];
+export type InputSectionKind = InputSection['kind'];
 
 // Frontend-only shapes, derived from the generated ones.
 export type ChatSettings = Pick<ConversationSummary, 'model' | 'reasoning'>;
