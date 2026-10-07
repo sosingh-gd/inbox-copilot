@@ -38,6 +38,19 @@ class UsageUpdatedEvent(ApiModel):
     usage: Usage
 
 
+class MemoryUpdatedEvent(ApiModel):
+    """Sent before the reply on a conversation's first message, when earlier conversations
+    were turned into facts. Counts are fact changes across all of them. `summary` says the
+    same in words; the reply keeps it as its first note."""
+
+    type: Literal["memory_updated"] = "memory_updated"
+    conversations: int
+    added: int
+    updated: int
+    deleted: int
+    summary: str
+
+
 class RunCompletedEvent(ApiModel):
     type: Literal["run_completed"] = "run_completed"
     message_id: str
@@ -70,6 +83,7 @@ ChatEventUnion = Annotated[
     | TextDeltaEvent
     | ThinkingDeltaEvent
     | UsageUpdatedEvent
+    | MemoryUpdatedEvent
     | RunCompletedEvent
     | RunFailedEvent
     | ToolStartedEvent

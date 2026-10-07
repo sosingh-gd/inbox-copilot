@@ -25,8 +25,21 @@ class ChatSettings(ApiModel):
     reasoning: ReasoningLevel = ReasoningLevel.balanced
 
 
-class ConversationCreate(ChatSettings):
+class MemorySettings(ApiModel):
+    # Replies see the facts remembered from earlier conversations. Fixed at creation.
+    use_memory: bool = True
+    # This conversation's facts are remembered for later ones. Can change at any time.
+    save_to_memory: bool = True
+
+
+class ConversationCreate(ChatSettings, MemorySettings):
     """Start an empty conversation. Its first message gives it a title."""
+
+
+class ConversationUpdate(ApiModel):
+    """Turning `save_to_memory` off forgets the facts this conversation added."""
+
+    save_to_memory: bool
 
 
 class ChatRunRequest(ApiModel):
@@ -73,7 +86,9 @@ class InputSection(ApiModel):
     block of a message. `tokens` is an estimate: the call's real input tokens, shared out
     by each section's size."""
 
-    kind: Literal["system", "tool_definition", "text", "thinking", "tool_use", "tool_result"]
+    kind: Literal[
+        "system", "memory", "tool_definition", "text", "thinking", "tool_use", "tool_result"
+    ]
     label: str
     text: str  # very long sections are cut short; `chars` is the full length
     chars: int
@@ -107,7 +122,7 @@ class MessageRead(ApiModel):
     created_at: AwareDatetime
 
 
-class ConversationSummary(ChatSettings):
+class ConversationSummary(ChatSettings, MemorySettings):
     id: str
     title: str
     updated_at: AwareDatetime

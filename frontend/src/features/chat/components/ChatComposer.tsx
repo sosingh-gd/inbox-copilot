@@ -6,6 +6,7 @@ import { ChatSettingsBar, type ChatSettingsBarProps } from './ChatSettingsBar';
 interface ChatComposerProps {
   settings: ChatSettingsBarProps['settings'];
   onSettingChange: ChatSettingsBarProps['onChange'];
+  isMemoryLocked: boolean;
   draft: string;
   onDraftChange: (draft: string) => void;
   canSend: boolean;
@@ -15,6 +16,7 @@ interface ChatComposerProps {
 export function ChatComposer({
   settings,
   onSettingChange,
+  isMemoryLocked,
   draft,
   onDraftChange,
   canSend,
@@ -30,7 +32,11 @@ export function ChatComposer({
 
   return (
     <div className="w-full">
-      <ChatSettingsBar onChange={onSettingChange} settings={settings} />
+      <ChatSettingsBar
+        isMemoryLocked={isMemoryLocked}
+        onChange={onSettingChange}
+        settings={settings}
+      />
       <div className="flex items-end gap-3 rounded-lg border border-slate-300 bg-white p-2 shadow-sm focus-within:border-brand focus-within:ring-4 focus-within:ring-blue-100">
         <TextArea
           aria-label="Message"

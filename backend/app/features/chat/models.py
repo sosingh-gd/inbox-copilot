@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import JSON, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, UTCDateTime, utc_now
@@ -20,6 +20,12 @@ class Conversation(Base):
     title: Mapped[str] = mapped_column(String(200))
     model: Mapped[str] = mapped_column(String(32))
     reasoning: Mapped[str] = mapped_column(String(32))
+    # Memory: whether replies see the facts from earlier conversations (fixed once the
+    # conversation exists), and whether this conversation's own facts are remembered.
+    use_memory: Mapped[bool] = mapped_column(Boolean, default=True)
+    save_to_memory: Mapped[bool] = mapped_column(Boolean, default=True)
+    # The created_at of the last message turned into facts. None: nothing compacted yet.
+    compacted_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, index=True)
 

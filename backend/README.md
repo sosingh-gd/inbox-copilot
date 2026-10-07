@@ -36,13 +36,14 @@ app/
 ├── features/
 │   ├── auth/            # Google OAuth, sessions, encrypted refresh tokens (HTTP: /auth)
 │   ├── chat/            # conversations + SSE stream that runs the agents (HTTP: /chat)
+│   ├── memory/          # facts remembered across conversations, lazy compaction (HTTP: /memory)
 │   ├── emails/          # agent tools only: EmailSource protocol + Gmail implementation
 │   ├── calendar/        # agent tools only: CalendarSource protocol + Google Calendar implementation
 │   └── weather/         # agent tools only: WeatherSource protocol + Open-Meteo implementation
 └── scripts/export_openapi.py
 ```
 
-Only `auth` and `chat` expose HTTP endpoints. The data features (`emails`, `calendar`, `weather`)
+Only `auth`, `chat` and `memory` expose HTTP endpoints. The data features (`emails`, `calendar`, `weather`)
 have no router or service: they provide a `Source` plus the `tools.py` the agents call.
 
 Features use this split (each one has only the files it needs):
@@ -55,6 +56,7 @@ Features use this split (each one has only the files it needs):
 | `repository.py` | SQLAlchemy queries |
 | `models.py` | ORM tables (also import them in `db/models.py`) |
 | `sources.py` | Adapters for external systems, behind a `Protocol` so local fake data can stand in for them |
+| `llm.py` | A direct Claude call outside the agents (e.g. memory compaction), behind a `Protocol` |
 | `tools.py` | Agent tools built on a source (Pydantic input model + async handler) |
 | `deps.py` | Wires the above together for FastAPI's dependency injection |
 

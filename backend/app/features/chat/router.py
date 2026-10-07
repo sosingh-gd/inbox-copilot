@@ -10,7 +10,13 @@ from app.core.sse import EventStreamResponse, format_sse, with_heartbeat
 
 from .deps import ChatServiceDep
 from .events import RunFailedEvent
-from .schemas import ChatRunRequest, ConversationCreate, ConversationDetail, ConversationSummary
+from .schemas import (
+    ChatRunRequest,
+    ConversationCreate,
+    ConversationDetail,
+    ConversationSummary,
+    ConversationUpdate,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -33,6 +39,13 @@ def get_conversation(
     conversation_id: str, user: CurrentUser, service: ChatServiceDep
 ) -> ConversationDetail:
     return service.get_conversation(user.id, conversation_id)
+
+
+@router.patch("/conversations/{conversation_id}")
+def update_conversation(
+    conversation_id: str, body: ConversationUpdate, user: CurrentUser, service: ChatServiceDep
+) -> ConversationSummary:
+    return service.update_conversation(user.id, conversation_id, body)
 
 
 @router.post(

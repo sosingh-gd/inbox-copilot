@@ -42,10 +42,17 @@ class AgentRegistry:
         self._usage = TokenUsage()  # one registry per request, so one total per message
         self._orchestrator = build_orchestrator(runner, specialists, today, self._usage)
 
+    @property
+    def usage(self) -> TokenUsage:
+        """This message's token totals. Work done before the agents run (memory compaction)
+        adds to it too, so the reply's totals include it."""
+        return self._usage
+
     def stream(
-        self, messages: list[MessageParam], model: str, effort: Effort
+        self, messages: list[MessageParam], model: str, effort: Effort, memory: str | None = None
     ) -> AsyncIterator[AgentEvent]:
-        """Run the orchestrator with the model and effort chosen for this message. The
-        specialists keep their own fixed settings."""
-        orchestrator = replace(self._orchestrator, model=model, effort=effort)
+        """Run the orchestrator with the model and effort chosen for this message, and the
+        facts remembered from earlier conversations. The specialists keep their own fixed
+        settings and never see memory."""
+        orchestrator = replace(self._orchestrator, model=model, effort=effort, memory=memory)
         return self._runner.stream(orchestrator, messages, self._usage)

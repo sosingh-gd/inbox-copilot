@@ -16,6 +16,7 @@ const REASONING_LABELS: Record<ReasoningLevel, string> = {
 /** How each kind of input is named and colored in the input breakdown. */
 export const INPUT_KINDS: Record<InputSectionKind, { label: string; color: string }> = {
   system: { label: 'System prompt', color: 'bg-sky-500' },
+  memory: { label: 'Memory', color: 'bg-fuchsia-500' },
   tool_definition: { label: 'Tool definitions', color: 'bg-amber-500' },
   text: { label: 'Conversation text', color: 'bg-slate-500' },
   thinking: { label: 'Thinking', color: 'bg-violet-500' },
@@ -32,6 +33,8 @@ export const REASONING_OPTIONS = toOptions(REASONING_LABELS);
 export const DEFAULT_SETTINGS: ChatSettings = {
   model: 'sonnet',
   reasoning: 'balanced',
+  useMemory: true,
+  saveToMemory: true,
 };
 
 /** The id of the reply that is still streaming; saved replies have server ids. */

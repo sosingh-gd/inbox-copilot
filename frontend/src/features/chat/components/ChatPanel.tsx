@@ -20,6 +20,7 @@ export function ChatPanel({ conversationId, onConversationCreated, userInitial }
     <ChatComposer
       canSend={chat.canSend}
       draft={chat.draft}
+      isMemoryLocked={chat.isMemoryLocked}
       onDraftChange={chat.setDraft}
       onSend={chat.send}
       onSettingChange={chat.changeSetting}

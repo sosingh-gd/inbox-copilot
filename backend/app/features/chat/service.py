@@ -23,8 +23,10 @@ from app.agents.registry import AgentRegistry
 from app.agents.trace import ModelCall
 from app.core.errors import NotFoundError
 from app.core.schemas import ApiModel
+from app.features.memory.service import CompactionResult, MemoryService
 
 from .events import (
+    MemoryUpdatedEvent,
     RunCompletedEvent,
     RunFailedEvent,
     RunStartedEvent,
@@ -41,6 +43,7 @@ from .schemas import (
     ConversationCreate,
     ConversationDetail,
     ConversationSummary,
+    ConversationUpdate,
     ModelChoice,
     ReasoningLevel,
     Usage,
@@ -71,11 +74,16 @@ class LlmMessage:
 class ChatTurn:
     """Everything the stream needs, loaded before streaming starts."""
 
+    user_id: int
     conversation_id: str
     user_message_id: str
     model: ModelChoice
     reasoning: ReasoningLevel
     history: list[LlmMessage]
+    use_memory: bool
+    # Lazy compaction: a conversation's first message first turns the user's other saved
+    # conversations into facts, so this one starts with an up-to-date memory.
+    compact_memory: bool
 
 
 class ChatService:
@@ -83,10 +91,12 @@ class ChatService:
         self,
         repo: ChatRepository,
         agents: AgentRegistry,
+        memory: MemoryService,
         new_session: sessionmaker[Session],
     ) -> None:
         self.repo = repo
         self.agents = agents
+        self.memory = memory
         # Streams outlive the request, so writes after streaming use their own short session.
         self.new_session = new_session
 
@@ -105,15 +115,32 @@ class ChatService:
                 title=NEW_CONVERSATION_TITLE,
                 model=request.model,
                 reasoning=request.reasoning,
+                use_memory=request.use_memory,
+                save_to_memory=request.save_to_memory,
             )
         )
         self.repo.commit()
         return ConversationSummary.model_validate(conversation)
 
+    def update_conversation(
+        self, user_id: int, conversation_id: str, request: ConversationUpdate
+    ) -> ConversationSummary:
+        """Turning saving off forgets the facts this conversation added. Either way the
+        whole conversation is compacted again the next time it is saved to memory."""
+        conversation = self._owned_conversation(user_id, conversation_id)
+        if request.save_to_memory != conversation.save_to_memory:
+            if not request.save_to_memory:
+                self.memory.forget_conversation(conversation.id)
+            conversation.save_to_memory = request.save_to_memory
+            conversation.compacted_at = None
+            self.repo.commit()
+        return ConversationSummary.model_validate(conversation)
+
     def start_turn(self, user_id: int, conversation_id: str, request: ChatRunRequest) -> ChatTurn:
         """Validate and save the user's message. Errors here become normal 4xx responses."""
         conversation = self._owned_conversation(user_id, conversation_id)
-        if not conversation.messages:
+        is_first_message = not conversation.messages
+        if is_first_message:
             conversation.title = _title_from(request.content)
         conversation.model = request.model
         conversation.reasoning = request.reasoning
@@ -135,11 +162,14 @@ class ChatService:
         )
 
         return ChatTurn(
+            user_id=user_id,
             conversation_id=conversation.id,
             user_message_id=message.id,
             model=request.model,
             reasoning=request.reasoning,
             history=[LlmMessage(role=m.role, content=m.content) for m in conversation.messages],  # type: ignore[arg-type]
+            use_memory=conversation.use_memory,
+            compact_memory=conversation.use_memory and is_first_message,
         )
 
     async def stream_reply(self, turn: ChatTurn) -> AsyncIterator[ApiModel]:
@@ -154,9 +184,33 @@ class ChatService:
         finished: RunFinished | None = None
         usage: Usage | None = None
         calls: list[ModelCall] = []
+
+        memory: str | None = None
+        memory_note: str | None = None
+        if turn.use_memory:
+            if turn.compact_memory:
+                totals = self.agents.usage
+                compaction = await self.memory.compact_pending(
+                    turn.user_id, turn.conversation_id, totals
+                )
+                if compaction.conversations:
+                    memory_note = _memory_note(compaction)
+                    yield MemoryUpdatedEvent(
+                        conversations=compaction.conversations,
+                        added=compaction.added,
+                        updated=compaction.updated,
+                        deleted=compaction.deleted,
+                        summary=memory_note,
+                    )
+                if totals.calls:
+                    usage = Usage.model_validate(totals, from_attributes=True)
+                    calls = list(totals.calls)
+                    yield UsageUpdatedEvent(usage=usage)
+            memory = await asyncio.to_thread(self.memory.facts_for_prompt, turn.user_id)
+
         try:
             async for event in self.agents.stream(
-                history, MODEL_IDS[turn.model], EFFORTS[turn.reasoning]
+                history, MODEL_IDS[turn.model], EFFORTS[turn.reasoning], memory
             ):
                 match event:
                     case TextDelta(text=text):
@@ -193,6 +247,7 @@ class ChatService:
             duration_ms,
             usage,
             calls,
+            memory_note,
         )
         logger.info(
             "run_completed saved_message=%s duration_ms=%d parts=%s %s",
@@ -216,6 +271,7 @@ class ChatService:
         duration_ms: int,
         usage: Usage | None,
         calls: list[ModelCall],
+        memory_note: str | None,
     ) -> str:
         with self.new_session() as session:
             repo = ChatRepository(session)
@@ -224,7 +280,10 @@ class ChatService:
                     conversation_id=conversation_id,
                     role="assistant",
                     content=finished.text,
-                    parts=[_part_dict(p) for p in finished.parts],
+                    # The memory note is shown with the reply but kept out of `content`, so
+                    # Claude never sees it in the history.
+                    parts=([{"type": "note", "text": memory_note}] if memory_note else [])
+                    + [_part_dict(p) for p in finished.parts],
                     duration_ms=duration_ms,
                     usage=usage.model_dump() if usage else None,
                     calls=[asdict(c) for c in calls],
@@ -232,6 +291,23 @@ class ChatService:
             )
             repo.commit()
             return message.id
+
+
+def _memory_note(compaction: CompactionResult) -> str:
+    """E.g. "Memory updated from 2 earlier chats: 3 added, 1 changed." """
+    chats = f"{compaction.conversations} earlier chat{'s' if compaction.conversations > 1 else ''}"
+    changes = [
+        f"{count} {label}"
+        for count, label in (
+            (compaction.added, "added"),
+            (compaction.updated, "changed"),
+            (compaction.deleted, "removed"),
+        )
+        if count
+    ]
+    if not changes:
+        return f"Checked {chats} for memory: nothing new to remember."
+    return f"Memory updated from {chats}: {', '.join(changes)}."
 
 
 def _usage_summary(usage: Usage | None) -> str:

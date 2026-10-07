@@ -1,4 +1,4 @@
-import { MessageSquare, Plus } from 'lucide-react';
+import { MessageSquare, MessageSquareDashed, Plus } from 'lucide-react';
 import { IconButton, Spinner, StatusText } from '@/components';
 import { errorMessage } from '@/lib/http';
 import { cn } from '@/utils/cn';
@@ -61,7 +61,16 @@ export function ConversationList({
                   onClick={() => onSelect(conversation.id)}
                   type="button"
                 >
-                  <MessageSquare className="mt-0.5 h-4 w-4 shrink-0" />
+                  {conversation.saveToMemory ? (
+                    <MessageSquare className="mt-0.5 h-4 w-4 shrink-0" />
+                  ) : (
+                    <MessageSquareDashed
+                      aria-label="Not saved to memory"
+                      className="mt-0.5 h-4 w-4 shrink-0"
+                    >
+                      <title>Not saved to memory</title>
+                    </MessageSquareDashed>
+                  )}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{conversation.title}</span>
                     <span className="mt-1 block text-xs text-ink-muted">

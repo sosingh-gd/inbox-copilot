@@ -12,6 +12,7 @@ from anthropic.lib.streaming import ParsedMessageStreamEvent
 from anthropic.types import (
     MessageParam,
     OutputConfigParam,
+    TextBlockParam,
     ThinkingConfigParam,
     ToolResultBlockParam,
 )
@@ -96,14 +97,14 @@ class AgentRunner:
         tool_params = [t.to_api() for t in agent.tools]
         for turn in range(1, agent.max_turns + 1):
             turn_started = time.perf_counter()
-            sections = describe_input(agent.system_prompt, tool_params, messages)
+            sections = describe_input(agent.system_prompt, tool_params, messages, agent.memory)
             try:
                 async with self._client.messages.stream(
                     model=agent.model,
                     max_tokens=max_tokens,
                     thinking=thinking,
                     output_config=output_config,
-                    system=agent.system_prompt,
+                    system=_system_blocks(agent),
                     tools=tool_params,
                     messages=messages,
                 ) as stream:
@@ -323,6 +324,15 @@ class AgentRunner:
             "is_error": is_error,
         }
         return result, not is_error, duration_ms
+
+
+def _system_blocks(agent: AgentDefinition) -> list[TextBlockParam]:
+    """The system prompt, then the remembered facts as their own block, so the fixed prompt
+    is sent unchanged whatever is remembered."""
+    blocks: list[TextBlockParam] = [{"type": "text", "text": agent.system_prompt}]
+    if agent.memory:
+        blocks.append({"type": "text", "text": agent.memory})
+    return blocks
 
 
 def _describe_blocks(content: list[Any]) -> str:

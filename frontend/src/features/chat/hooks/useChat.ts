@@ -1,7 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { errorMessage } from '@/lib/http';
-import { chatApi, chatKeys, useConversationQuery } from '../api/chat.api';
+import {
+  chatApi,
+  chatKeys,
+  useConversationQuery,
+  useUpdateConversationMutation,
+} from '../api/chat.api';
 import { streamChatRun } from '../api/chat.stream';
 import { DEFAULT_SETTINGS, LIVE_REPLY_ID } from '../constants';
 import type { ChatMessage, ChatSettings, ConversationDetail } from '../types';
@@ -46,9 +51,25 @@ export function useChat(
   useEffect(() => () => abortRef.current?.abort(), []);
 
   const messages = conversation.data?.messages ?? [];
+  const updateConversation = useUpdateConversationMutation();
 
   function changeSetting<K extends keyof ChatSettings>(name: K, value: ChatSettings[K]) {
     setChosenSettings({ ...settings, [name]: value });
+    // Model and reasoning go with each message, but "save to memory" is stored on the
+    // conversation straight away. A new chat sends it when the conversation is created.
+    if (name === 'saveToMemory' && activeId !== undefined) {
+      const saveToMemory = value === true;
+      setError(null);
+      updateConversation.mutate(
+        { conversationId: activeId, saveToMemory },
+        {
+          onError: (err) => {
+            setChosenSettings((current) => current && { ...current, saveToMemory: !saveToMemory });
+            setError(errorMessage(err, 'Could not change the memory setting.'));
+          },
+        },
+      );
+    }
   }
 
   function updateCachedMessages(id: string, update: (messages: ChatMessage[]) => ChatMessage[]) {
@@ -122,6 +143,11 @@ export function useChat(
               ...reply,
               parts: finishToolPart(reply.parts ?? [], tool, ok, durationMs),
             })),
+          onMemoryUpdated: (summary) =>
+            updateReply(conversationKey, (reply) => ({
+              ...reply,
+              parts: [{ type: 'note', text: summary }, ...(reply.parts ?? [])],
+            })),
           onUsage: (usage) => updateReply(conversationKey, (reply) => ({ ...reply, usage })),
           onCompleted: (durationMs) =>
             updateReply(conversationKey, (reply) => ({ ...reply, durationMs })),
@@ -157,6 +183,8 @@ export function useChat(
     error,
     settings,
     changeSetting,
+    // Whether replies see earlier chats' facts is fixed once the conversation exists.
+    isMemoryLocked: activeId !== undefined,
     draft,
     setDraft,
     canSend: draft.trim() !== '' && !isReplying,

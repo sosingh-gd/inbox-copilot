@@ -5,3 +5,4 @@ export * from './IconButton';
 export * from './Select';
 export * from './Spinner';
 export * from './TextArea';
+export * from './Toggle';

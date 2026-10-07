@@ -90,7 +90,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update Conversation */
+        patch: operations["update_conversation"];
         trace?: never;
     };
     "/api/v1/chat/conversations/{conversation_id}/stream": {
@@ -133,6 +134,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/memory/facts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Memory Facts */
+        get: operations["list_memory_facts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/memory/facts/{fact_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Memory Fact */
+        delete: operations["delete_memory_fact"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -141,7 +176,7 @@ export interface components {
          * ChatEvent
          * @description Every SSE `data:` payload on the chat stream is one of these.
          */
-        ChatEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["ThinkingDeltaEvent"] | components["schemas"]["UsageUpdatedEvent"] | components["schemas"]["RunCompletedEvent"] | components["schemas"]["RunFailedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"];
+        ChatEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["ThinkingDeltaEvent"] | components["schemas"]["UsageUpdatedEvent"] | components["schemas"]["MemoryUpdatedEvent"] | components["schemas"]["RunCompletedEvent"] | components["schemas"]["RunFailedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"];
         /**
          * ChatRunRequest
          * @description Send one user message. Model and reasoning may change from message to message.
@@ -163,6 +198,16 @@ export interface components {
             model: components["schemas"]["ModelChoice"];
             /** @default balanced */
             reasoning: components["schemas"]["ReasoningLevel"];
+            /**
+             * Savetomemory
+             * @default true
+             */
+            saveToMemory: boolean;
+            /**
+             * Usememory
+             * @default true
+             */
+            useMemory: boolean;
         };
         /** ConversationDetail */
         ConversationDetail: {
@@ -174,6 +219,11 @@ export interface components {
             model: components["schemas"]["ModelChoice"];
             /** @default balanced */
             reasoning: components["schemas"]["ReasoningLevel"];
+            /**
+             * Savetomemory
+             * @default true
+             */
+            saveToMemory: boolean;
             /** Title */
             title: string;
             /**
@@ -181,6 +231,11 @@ export interface components {
              * Format: date-time
              */
             updatedAt: string;
+            /**
+             * Usememory
+             * @default true
+             */
+            useMemory: boolean;
         };
         /** ConversationSummary */
         ConversationSummary: {
@@ -190,6 +245,11 @@ export interface components {
             model: components["schemas"]["ModelChoice"];
             /** @default balanced */
             reasoning: components["schemas"]["ReasoningLevel"];
+            /**
+             * Savetomemory
+             * @default true
+             */
+            saveToMemory: boolean;
             /** Title */
             title: string;
             /**
@@ -197,6 +257,19 @@ export interface components {
              * Format: date-time
              */
             updatedAt: string;
+            /**
+             * Usememory
+             * @default true
+             */
+            useMemory: boolean;
+        };
+        /**
+         * ConversationUpdate
+         * @description Turning `save_to_memory` off forgets the facts this conversation added.
+         */
+        ConversationUpdate: {
+            /** Savetomemory */
+            saveToMemory: boolean;
         };
         /** CurrentUserRead */
         CurrentUserRead: {
@@ -205,6 +278,11 @@ export interface components {
             /** Scopes */
             scopes: string[];
         };
+        /**
+         * FactCategory
+         * @enum {string}
+         */
+        FactCategory: "preference" | "person" | "commitment" | "deadline" | "other";
         /** FieldError */
         FieldError: {
             /** Code */
@@ -240,13 +318,53 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "system" | "tool_definition" | "text" | "thinking" | "tool_use" | "tool_result";
+            kind: "system" | "memory" | "tool_definition" | "text" | "thinking" | "tool_use" | "tool_result";
             /** Label */
             label: string;
             /** Text */
             text: string;
             /** Tokens */
             tokens: number;
+        };
+        /** MemoryFactRead */
+        MemoryFactRead: {
+            category: components["schemas"]["FactCategory"];
+            /** Id */
+            id: number;
+            /** Sourceconversationid */
+            sourceConversationId: string;
+            /** Sourceconversationtitle */
+            sourceConversationTitle: string;
+            /** Text */
+            text: string;
+            /**
+             * Updatedat
+             * Format: date-time
+             */
+            updatedAt: string;
+        };
+        /**
+         * MemoryUpdatedEvent
+         * @description Sent before the reply on a conversation's first message, when earlier conversations
+         *     were turned into facts. Counts are fact changes across all of them. `summary` says the
+         *     same in words; the reply keeps it as its first note.
+         */
+        MemoryUpdatedEvent: {
+            /** Added */
+            added: number;
+            /** Conversations */
+            conversations: number;
+            /** Deleted */
+            deleted: number;
+            /** Summary */
+            summary: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "memory_updated";
+            /** Updated */
+            updated: number;
         };
         /** MessageRead */
         MessageRead: {
@@ -1099,6 +1217,114 @@ export interface operations {
             };
         };
     };
+    update_conversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: {
+                inbox_copilot_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConversationUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationSummary"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
     stream_chat_run: {
         parameters: {
             query?: never;
@@ -1224,6 +1450,210 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HealthRead"];
                 };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    list_memory_facts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                inbox_copilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryFactRead"][];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+            /** @description Bad Gateway */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProblemDetail"];
+                    "application/problem+json": unknown;
+                };
+            };
+        };
+    };
+    delete_memory_fact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fact_id: number;
+            };
+            cookie?: {
+                inbox_copilot_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Bad Request */
             400: {

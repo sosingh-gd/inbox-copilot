@@ -1,6 +1,6 @@
-import { queryOptions, useQuery } from '@tanstack/react-query';
+import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, unwrap } from '@/lib/http';
-import type { ChatSettings } from '../types';
+import type { ChatSettings, ConversationDetail, ConversationSummary } from '../types';
 
 export const chatKeys = {
   list: ['chat', 'conversations'] as const,
@@ -21,6 +21,14 @@ export const chatApi = {
 
   createConversation: (settings: ChatSettings) =>
     unwrap(api.POST('/api/v1/chat/conversations', { body: settings })),
+
+  updateConversation: (conversationId: string, saveToMemory: boolean) =>
+    unwrap(
+      api.PATCH('/api/v1/chat/conversations/{conversation_id}', {
+        params: { path: { conversation_id: conversationId } },
+        body: { saveToMemory },
+      }),
+    ),
 };
 
 export function useConversationsQuery() {
@@ -37,6 +45,26 @@ export function conversationQuery(conversationId: string) {
     // A conversation only changes when we send a message, and useChat refetches after
     // every send. Refetching on window focus could wipe a reply while it is streaming.
     refetchOnWindowFocus: false,
+  });
+}
+
+/** Turns "save to memory" on or off. Turning it off forgets the facts the chat added. */
+export function useUpdateConversationMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      conversationId,
+      saveToMemory,
+    }: {
+      conversationId: string;
+      saveToMemory: boolean;
+    }) => chatApi.updateConversation(conversationId, saveToMemory),
+    onSuccess: (updated: ConversationSummary) => {
+      queryClient.setQueryData<ConversationDetail>(chatKeys.detail(updated.id), (cached) =>
+        cached ? { ...cached, ...updated } : cached,
+      );
+      void queryClient.invalidateQueries({ queryKey: chatKeys.list });
+    },
   });
 }
 

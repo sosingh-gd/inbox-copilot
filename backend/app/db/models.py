@@ -2,5 +2,13 @@
 
 from app.features.auth.models import GoogleCredential, LoginSession, User
 from app.features.chat.models import ChatMessage, Conversation
+from app.features.memory.models import MemoryFact
 
-__all__ = ["ChatMessage", "Conversation", "GoogleCredential", "LoginSession", "User"]
+__all__ = [
+    "ChatMessage",
+    "Conversation",
+    "GoogleCredential",
+    "LoginSession",
+    "MemoryFact",
+    "User",
+]

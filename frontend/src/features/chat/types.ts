@@ -19,4 +19,7 @@ export type InputSection = Schemas['InputSection'];
 export type InputSectionKind = InputSection['kind'];
 
 // Frontend-only shapes, derived from the generated ones.
-export type ChatSettings = Pick<ConversationSummary, 'model' | 'reasoning'>;
+export type ChatSettings = Pick<
+  ConversationSummary,
+  'model' | 'reasoning' | 'useMemory' | 'saveToMemory'
+>;

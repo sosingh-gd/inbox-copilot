@@ -5,6 +5,7 @@
         "description": "Every SSE `data:` payload on the chat stream is one of these.",
         "discriminator": {
           "mapping": {
+            "memory_updated": "#/components/schemas/MemoryUpdatedEvent",
             "run_completed": "#/components/schemas/RunCompletedEvent",
             "run_failed": "#/components/schemas/RunFailedEvent",
             "run_started": "#/components/schemas/RunStartedEvent",
@@ -28,6 +29,9 @@
           },
           {
             "$ref": "#/components/schemas/UsageUpdatedEvent"
+          },
+          {
+            "$ref": "#/components/schemas/MemoryUpdatedEvent"
           },
           {
             "$ref": "#/components/schemas/RunCompletedEvent"
@@ -78,6 +82,16 @@
           "reasoning": {
             "$ref": "#/components/schemas/ReasoningLevel",
             "default": "balanced"
+          },
+          "saveToMemory": {
+            "default": true,
+            "title": "Savetomemory",
+            "type": "boolean"
+          },
+          "useMemory": {
+            "default": true,
+            "title": "Usememory",
+            "type": "boolean"
           }
         },
         "title": "ConversationCreate",
@@ -104,6 +118,11 @@
             "$ref": "#/components/schemas/ReasoningLevel",
             "default": "balanced"
           },
+          "saveToMemory": {
+            "default": true,
+            "title": "Savetomemory",
+            "type": "boolean"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -112,9 +131,16 @@
             "format": "date-time",
             "title": "Updatedat",
             "type": "string"
+          },
+          "useMemory": {
+            "default": true,
+            "title": "Usememory",
+            "type": "boolean"
           }
         },
         "required": [
+          "useMemory",
+          "saveToMemory",
           "model",
           "reasoning",
           "id",
@@ -139,6 +165,11 @@
             "$ref": "#/components/schemas/ReasoningLevel",
             "default": "balanced"
           },
+          "saveToMemory": {
+            "default": true,
+            "title": "Savetomemory",
+            "type": "boolean"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -147,9 +178,16 @@
             "format": "date-time",
             "title": "Updatedat",
             "type": "string"
+          },
+          "useMemory": {
+            "default": true,
+            "title": "Usememory",
+            "type": "boolean"
           }
         },
         "required": [
+          "useMemory",
+          "saveToMemory",
           "model",
           "reasoning",
           "id",
@@ -157,6 +195,20 @@
           "updatedAt"
         ],
         "title": "ConversationSummary",
+        "type": "object"
+      },
+      "ConversationUpdate": {
+        "description": "Turning `save_to_memory` off forgets the facts this conversation added.",
+        "properties": {
+          "saveToMemory": {
+            "title": "Savetomemory",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "saveToMemory"
+        ],
+        "title": "ConversationUpdate",
         "type": "object"
       },
       "CurrentUserRead": {
@@ -179,6 +231,17 @@
         ],
         "title": "CurrentUserRead",
         "type": "object"
+      },
+      "FactCategory": {
+        "enum": [
+          "preference",
+          "person",
+          "commitment",
+          "deadline",
+          "other"
+        ],
+        "title": "FactCategory",
+        "type": "string"
       },
       "FieldError": {
         "properties": {
@@ -241,6 +304,7 @@
           "kind": {
             "enum": [
               "system",
+              "memory",
               "tool_definition",
               "text",
               "thinking",
@@ -271,6 +335,85 @@
           "tokens"
         ],
         "title": "InputSection",
+        "type": "object"
+      },
+      "MemoryFactRead": {
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/FactCategory"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "sourceConversationId": {
+            "title": "Sourceconversationid",
+            "type": "string"
+          },
+          "sourceConversationTitle": {
+            "title": "Sourceconversationtitle",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "title": "Updatedat",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "category",
+          "sourceConversationId",
+          "sourceConversationTitle",
+          "updatedAt"
+        ],
+        "title": "MemoryFactRead",
+        "type": "object"
+      },
+      "MemoryUpdatedEvent": {
+        "description": "Sent before the reply on a conversation's first message, when earlier conversations\nwere turned into facts. Counts are fact changes across all of them. `summary` says the\nsame in words; the reply keeps it as its first note.",
+        "properties": {
+          "added": {
+            "title": "Added",
+            "type": "integer"
+          },
+          "conversations": {
+            "title": "Conversations",
+            "type": "integer"
+          },
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "type": {
+            "const": "memory_updated",
+            "default": "memory_updated",
+            "title": "Type",
+            "type": "string"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "type",
+          "conversations",
+          "added",
+          "updated",
+          "deleted",
+          "summary"
+        ],
+        "title": "MemoryUpdatedEvent",
         "type": "object"
       },
       "MessageRead": {
@@ -1604,6 +1747,150 @@
         "tags": [
           "chat"
         ]
+      },
+      "patch": {
+        "operationId": "update_conversation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "inbox_copilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Inbox Copilot Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConversationUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConversationSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "summary": "Update Conversation",
+        "tags": [
+          "chat"
+        ]
       }
     },
     "/api/v1/chat/conversations/{conversation_id}/stream": {
@@ -1860,6 +2147,266 @@
         "summary": "Health Check",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/v1/memory/facts": {
+      "get": {
+        "operationId": "list_memory_facts",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "inbox_copilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Inbox Copilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MemoryFactRead"
+                  },
+                  "title": "Response List Memory Facts",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "summary": "List Memory Facts",
+        "tags": [
+          "memory"
+        ]
+      }
+    },
+    "/api/v1/memory/facts/{fact_id}": {
+      "delete": {
+        "operationId": "delete_memory_fact",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fact_id",
+            "required": true,
+            "schema": {
+              "title": "Fact Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "inbox_copilot_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Inbox Copilot Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Unprocessable Entity"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Internal Server Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              },
+              "application/problem+json": {}
+            },
+            "description": "Bad Gateway"
+          }
+        },
+        "summary": "Delete Memory Fact",
+        "tags": [
+          "memory"
         ]
       }
     }

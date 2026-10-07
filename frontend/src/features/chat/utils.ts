@@ -2,7 +2,12 @@ import { LIVE_REPLY_ID } from './constants';
 import type { ChatMessage, ChatSettings, MessagePart, Usage } from './types';
 
 export function settingsOf(source: ChatSettings): ChatSettings {
-  return { model: source.model, reasoning: source.reasoning };
+  return {
+    model: source.model,
+    reasoning: source.reasoning,
+    useMemory: source.useMemory,
+    saveToMemory: source.saveToMemory,
+  };
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

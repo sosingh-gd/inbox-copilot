@@ -27,6 +27,10 @@ export const router = createBrowserRouter([
             path: `${paths.chats}/:conversationId?`,
             lazy: () => import('@/pages/ChatPage').then((m) => ({ Component: m.ChatPage })),
           },
+          {
+            path: paths.memory,
+            lazy: () => import('@/pages/MemoryPage').then((m) => ({ Component: m.MemoryPage })),
+          },
         ],
       },
       { path: '*', element: <Navigate replace to={paths.home} /> },

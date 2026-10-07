@@ -10,6 +10,7 @@ from app.features.calendar.deps import get_calendar_source
 from app.features.calendar.sources import CalendarSource
 from app.features.emails.deps import get_email_source
 from app.features.emails.sources import EmailSource
+from app.features.memory.deps import MemoryServiceDep
 from app.features.weather.deps import get_weather_source
 from app.features.weather.sources import WeatherSource
 
@@ -31,9 +32,11 @@ def get_agent_registry(
 
 
 def get_chat_service(
-    session: SessionDep, agents: Annotated[AgentRegistry, Depends(get_agent_registry)]
+    session: SessionDep,
+    agents: Annotated[AgentRegistry, Depends(get_agent_registry)],
+    memory: MemoryServiceDep,
 ) -> ChatService:
-    return ChatService(ChatRepository(session), agents, session_factory())
+    return ChatService(ChatRepository(session), agents, memory, session_factory())
 
 
 ChatServiceDep = Annotated[ChatService, Depends(get_chat_service)]

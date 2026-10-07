@@ -10,7 +10,9 @@ from typing import Any, Literal
 
 from anthropic.types import MessageParam, ToolUnionParam
 
-SectionKind = Literal["system", "tool_definition", "text", "thinking", "tool_use", "tool_result"]
+SectionKind = Literal[
+    "system", "memory", "tool_definition", "text", "thinking", "tool_use", "tool_result"
+]
 
 MAX_SECTION_CHARS = 50_000  # keeps one huge tool result from bloating the database
 
@@ -38,10 +40,15 @@ class ModelCall:
 
 
 def describe_input(
-    system: str, tools: list[ToolUnionParam], messages: list[MessageParam]
+    system: str,
+    tools: list[ToolUnionParam],
+    messages: list[MessageParam],
+    memory: str | None = None,
 ) -> list[InputSection]:
     """Split one request's input into sections, in the order Claude receives them."""
     sections = [_section("system", "system prompt", system)]
+    if memory:
+        sections.append(_section("memory", "remembered facts", memory))
     for tool in tools:
         sections.append(
             _section("tool_definition", str(tool.get("name", "tool")), json.dumps(tool, indent=2))

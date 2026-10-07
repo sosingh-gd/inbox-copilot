@@ -41,6 +41,8 @@ class AgentDefinition:
     max_turns: int = 8
     max_tokens: int = 4096
     effort: Effort | None = None
+    # Facts remembered from earlier conversations, sent as a second system block.
+    memory: str | None = None
 
 
 @dataclass
