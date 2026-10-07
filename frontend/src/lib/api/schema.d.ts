@@ -176,15 +176,20 @@ export interface components {
          * ChatEvent
          * @description Every SSE `data:` payload on the chat stream is one of these.
          */
-        ChatEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["ThinkingDeltaEvent"] | components["schemas"]["UsageUpdatedEvent"] | components["schemas"]["MemoryUpdatedEvent"] | components["schemas"]["RunCompletedEvent"] | components["schemas"]["RunFailedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"];
+        ChatEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["ThinkingDeltaEvent"] | components["schemas"]["UsageUpdatedEvent"] | components["schemas"]["MemoryUpdatedEvent"] | components["schemas"]["ContextCompactedEvent"] | components["schemas"]["RunCompletedEvent"] | components["schemas"]["RunFailedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"];
         /**
          * ChatRunRequest
-         * @description Send one user message. Model, reasoning and prompt caching may change from message
-         *     to message.
+         * @description Send one user message. Model, reasoning, prompt caching and the context cap may change
+         *     from message to message.
          */
         ChatRunRequest: {
             /** Content */
             content: string;
+            /**
+             * Contextcap
+             * @default 8000
+             */
+            contextCap: number;
             /** @default sonnet */
             model: components["schemas"]["ModelChoice"];
             /**
@@ -196,10 +201,36 @@ export interface components {
             reasoning: components["schemas"]["ReasoningLevel"];
         };
         /**
+         * ContextCompactedEvent
+         * @description Sent before the reply when the prompt neared the conversation's context cap and older
+         *     messages were folded into its summary. Token counts are estimates. `summary` describes
+         *     the change in words (it is not the summary itself); the reply keeps it as a note.
+         */
+        ContextCompactedEvent: {
+            /** Messages */
+            messages: number;
+            /** Summary */
+            summary: string;
+            /** Tokensafter */
+            tokensAfter: number;
+            /** Tokensbefore */
+            tokensBefore: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "context_compacted";
+        };
+        /**
          * ConversationCreate
          * @description Start an empty conversation. Its first message gives it a title.
          */
         ConversationCreate: {
+            /**
+             * Contextcap
+             * @default 8000
+             */
+            contextCap: number;
             /** @default sonnet */
             model: components["schemas"]["ModelChoice"];
             /**
@@ -222,6 +253,16 @@ export interface components {
         };
         /** ConversationDetail */
         ConversationDetail: {
+            /**
+             * Contextcap
+             * @default 8000
+             */
+            contextCap: number;
+            /**
+             * Contexttokens
+             * @default 0
+             */
+            contextTokens: number;
             /** Id */
             id: string;
             /** Messages */
@@ -240,6 +281,10 @@ export interface components {
              * @default true
              */
             saveToMemory: boolean;
+            /** Summarizedthrough */
+            summarizedThrough: string | null;
+            /** Summary */
+            summary: string | null;
             /** Title */
             title: string;
             /**
@@ -255,6 +300,11 @@ export interface components {
         };
         /** ConversationSummary */
         ConversationSummary: {
+            /**
+             * Contextcap
+             * @default 8000
+             */
+            contextCap: number;
             /** Id */
             id: string;
             /** @default sonnet */
@@ -351,7 +401,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "system" | "memory" | "tool_definition" | "text" | "thinking" | "tool_use" | "tool_result";
+            kind: "system" | "memory" | "summary" | "tool_definition" | "text" | "thinking" | "tool_use" | "tool_result";
             /** Label */
             label: string;
             /** Text */

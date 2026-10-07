@@ -107,7 +107,9 @@ class AgentRunner:
         tool_params = [t.to_api() for t in agent.tools]
         for turn in range(1, agent.max_turns + 1):
             turn_started = time.perf_counter()
-            sections = describe_input(agent.system_prompt, tool_params, messages, agent.memory)
+            sections = describe_input(
+                agent.system_prompt, tool_params, messages, agent.memory, agent.summary
+            )
             try:
                 async with self._client.messages.stream(
                     model=agent.model,
@@ -338,15 +340,17 @@ class AgentRunner:
 
 
 def _system_blocks(agent: AgentDefinition) -> list[TextBlockParam]:
-    """The system prompt, then the remembered facts as their own block, so the fixed prompt
-    is sent unchanged whatever is remembered. With caching on, the fixed prompt is marked:
-    tools come before it, so tools and system prompt are cached together and are read back
-    even when the memory or the conversation changes."""
+    """The system prompt, then the remembered facts and the conversation summary as blocks of
+    their own, so the fixed prompt is sent unchanged whatever they say. With caching on, the
+    fixed prompt is marked: tools come before it, so tools and system prompt are cached
+    together and are read back even when the memory, summary or conversation changes."""
     blocks: list[TextBlockParam] = [{"type": "text", "text": agent.system_prompt}]
     if agent.prompt_caching:
         blocks[0]["cache_control"] = CACHE_MARKER
     if agent.memory:
         blocks.append({"type": "text", "text": agent.memory})
+    if agent.summary:
+        blocks.append({"type": "text", "text": agent.summary})
     return blocks
 
 

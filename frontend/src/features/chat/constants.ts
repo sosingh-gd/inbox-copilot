@@ -17,6 +17,7 @@ const REASONING_LABELS: Record<ReasoningLevel, string> = {
 export const INPUT_KINDS: Record<InputSectionKind, { label: string; color: string }> = {
   system: { label: 'System prompt', color: 'bg-sky-500' },
   memory: { label: 'Memory', color: 'bg-fuchsia-500' },
+  summary: { label: 'Conversation summary', color: 'bg-indigo-500' },
   tool_definition: { label: 'Tool definitions', color: 'bg-amber-500' },
   text: { label: 'Conversation text', color: 'bg-slate-500' },
   thinking: { label: 'Thinking', color: 'bg-violet-500' },
@@ -52,10 +53,19 @@ const toOptions = <T extends string>(labels: Record<T, string>) =>
 export const MODEL_OPTIONS = toOptions(MODEL_LABELS);
 export const REASONING_OPTIONS = toOptions(REASONING_LABELS);
 
+/** Context caps offered per chat, in prompt tokens. Small ones make compaction easy to see. */
+const CONTEXT_CAPS = [4_000, 8_000, 16_000, 32_000];
+
+export const CONTEXT_CAP_OPTIONS = CONTEXT_CAPS.map((cap) => ({
+  value: String(cap),
+  label: `Cap ${cap / 1000}k`,
+}));
+
 export const DEFAULT_SETTINGS: ChatSettings = {
   model: 'sonnet',
   reasoning: 'balanced',
   promptCaching: true,
+  contextCap: 8_000,
   useMemory: true,
   saveToMemory: true,
 };

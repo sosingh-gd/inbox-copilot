@@ -14,6 +14,7 @@ from app.features.memory.deps import MemoryServiceDep
 from app.features.weather.deps import get_weather_source
 from app.features.weather.sources import WeatherSource
 
+from .llm import ClaudeSummarizer
 from .repository import ChatRepository
 from .service import ChatService
 
@@ -32,11 +33,14 @@ def get_agent_registry(
 
 
 def get_chat_service(
+    request: Request,
     session: SessionDep,
     agents: Annotated[AgentRegistry, Depends(get_agent_registry)],
     memory: MemoryServiceDep,
 ) -> ChatService:
-    return ChatService(ChatRepository(session), agents, memory, session_factory())
+    # The AsyncAnthropic client is created once in the app lifespan.
+    summarizer = ClaudeSummarizer(request.app.state.anthropic)
+    return ChatService(ChatRepository(session), agents, memory, summarizer, session_factory())
 
 
 ChatServiceDep = Annotated[ChatService, Depends(get_chat_service)]

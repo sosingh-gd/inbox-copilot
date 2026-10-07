@@ -7,7 +7,7 @@ from typing import Any, Literal
 from anthropic.types import ToolUnionParam, Usage
 from pydantic import BaseModel
 
-from .trace import ModelCall
+from .trace import InputSection, ModelCall, assign_tokens
 
 SONNET = "claude-sonnet-5-5"
 HAIKU = "claude-haiku-4-5"
@@ -43,6 +43,8 @@ class AgentDefinition:
     effort: Effort | None = None
     # Facts remembered from earlier conversations, sent as a second system block.
     memory: str | None = None
+    # A summary of the conversation's earlier messages, sent as a third system block.
+    summary: str | None = None
     # Mark the prompt for Claude's prompt cache, so unchanged input is read back cheaply.
     prompt_caching: bool = False
 
@@ -63,6 +65,27 @@ class TokenUsage:
         self.output_tokens += usage.output_tokens
         self.cache_read_tokens += usage.cache_read_input_tokens or 0
         self.cache_write_tokens += usage.cache_creation_input_tokens or 0
+
+    def record(self, agent: str, model: str, usage: Usage, sections: list[InputSection]) -> None:
+        """Add one direct Claude call made outside the agents (memory, context compaction):
+        its tokens, and a record of the call for the reply's token breakdown."""
+        self.add(usage)
+        cache_read = usage.cache_read_input_tokens or 0
+        cache_write = usage.cache_creation_input_tokens or 0
+        call_input = usage.input_tokens + cache_read + cache_write
+        assign_tokens(sections, call_input, cache_read, cache_write)
+        self.calls.append(
+            ModelCall(
+                agent=agent,
+                turn=len([c for c in self.calls if c.agent == agent]) + 1,
+                model=model,
+                input_tokens=call_input,
+                cache_read_tokens=cache_read,
+                cache_write_tokens=cache_write,
+                output_tokens=usage.output_tokens,
+                sections=sections,
+            )
+        )
 
 
 class AgentError(Exception):

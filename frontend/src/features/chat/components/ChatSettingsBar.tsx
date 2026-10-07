@@ -1,16 +1,27 @@
-import { BrainCircuit, Cpu, DatabaseZap, History, Save } from 'lucide-react';
+import { BrainCircuit, Cpu, DatabaseZap, Gauge, History, Save } from 'lucide-react';
 import { SegmentedControl, Select, Toggle } from '@/components';
-import { MODEL_OPTIONS, REASONING_OPTIONS } from '../constants';
+import { cn } from '@/utils/cn';
+import { CONTEXT_CAP_OPTIONS, MODEL_OPTIONS, REASONING_OPTIONS } from '../constants';
 import type { ChatSettings } from '../types';
+import { formatThousands } from '../utils';
 
 export interface ChatSettingsBarProps {
   settings: ChatSettings;
   onChange: <K extends keyof ChatSettings>(name: K, value: ChatSettings[K]) => void;
   /** True once the conversation exists: "use memory" can then no longer change. */
   isMemoryLocked: boolean;
+  /** Estimated prompt tokens before the next message, or null for a new chat. */
+  contextTokens: number | null;
 }
 
-export function ChatSettingsBar({ settings, onChange, isMemoryLocked }: ChatSettingsBarProps) {
+export function ChatSettingsBar({
+  settings,
+  onChange,
+  isMemoryLocked,
+  contextTokens,
+}: ChatSettingsBarProps) {
+  const contextShare = contextTokens === null ? 0 : contextTokens / settings.contextCap;
+
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <Select
@@ -28,6 +39,29 @@ export function ChatSettingsBar({ settings, onChange, isMemoryLocked }: ChatSett
         options={REASONING_OPTIONS}
         value={settings.reasoning}
       />
+
+      <div
+        className="flex items-center gap-2"
+        title="Near 80% of the cap, older messages are summarized and Claude sees the summary instead"
+      >
+        <Select
+          aria-label="Context cap"
+          icon={<Gauge className="h-4 w-4 text-indigo-700" />}
+          onChange={(cap) => onChange('contextCap', Number(cap))}
+          options={CONTEXT_CAP_OPTIONS}
+          value={String(settings.contextCap)}
+        />
+        {contextTokens !== null && (
+          <span
+            className={cn(
+              'text-xs tabular-nums',
+              contextShare > 0.8 ? 'font-medium text-amber-700' : 'text-ink-muted',
+            )}
+          >
+            ~{formatThousands(contextTokens)} / {formatThousands(settings.contextCap)}
+          </span>
+        )}
+      </div>
 
       <Toggle
         checked={settings.promptCaching}

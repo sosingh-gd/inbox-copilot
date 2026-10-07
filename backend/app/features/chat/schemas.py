@@ -20,12 +20,18 @@ class ReasoningLevel(StrEnum):
 
 MessageRole = Literal["user", "assistant"]
 
+# Prompt size, in tokens, that a conversation is kept under by summarizing older messages.
+ContextCap = Annotated[int, Field(ge=1_000, le=200_000)]
+DEFAULT_CONTEXT_CAP = 8_000
+
 
 class ChatSettings(ApiModel):
     model: ModelChoice = ModelChoice.sonnet
     reasoning: ReasoningLevel = ReasoningLevel.balanced
     # Ask Claude to cache the unchanged start of each prompt. Off: every call pays full price.
     prompt_caching: bool = True
+    # Near this many prompt tokens, older messages are summarized for Claude.
+    context_cap: ContextCap = DEFAULT_CONTEXT_CAP
 
 
 class MemorySettings(ApiModel):
@@ -46,13 +52,14 @@ class ConversationUpdate(ApiModel):
 
 
 class ChatRunRequest(ApiModel):
-    """Send one user message. Model, reasoning and prompt caching may change from message
-    to message."""
+    """Send one user message. Model, reasoning, prompt caching and the context cap may change
+    from message to message."""
 
     content: str = Field(min_length=1, max_length=20_000)
     model: ModelChoice = ModelChoice.sonnet
     reasoning: ReasoningLevel = ReasoningLevel.balanced
     prompt_caching: bool = True
+    context_cap: ContextCap = DEFAULT_CONTEXT_CAP
 
 
 class Usage(ApiModel):
@@ -94,7 +101,14 @@ class InputSection(ApiModel):
     section's two cache fields are its share of those, estimated the same way."""
 
     kind: Literal[
-        "system", "memory", "tool_definition", "text", "thinking", "tool_use", "tool_result"
+        "system",
+        "memory",
+        "summary",
+        "tool_definition",
+        "text",
+        "thinking",
+        "tool_use",
+        "tool_result",
     ]
     label: str
     text: str  # very long sections are cut short; `chars` is the full length
@@ -171,3 +185,9 @@ class ConversationSummary(ChatSettings, MemorySettings):
 
 class ConversationDetail(ConversationSummary):
     messages: list[MessageRead]
+    # What Claude sees instead of the messages up to and including `summarized_through`.
+    # Both None until the conversation first nears its context cap.
+    summary: str | None = None
+    summarized_through: AwareDatetime | None = None
+    # Estimated prompt size of the next message before its own text, to compare with the cap.
+    context_tokens: int = 0

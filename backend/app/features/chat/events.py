@@ -51,6 +51,18 @@ class MemoryUpdatedEvent(ApiModel):
     summary: str
 
 
+class ContextCompactedEvent(ApiModel):
+    """Sent before the reply when the prompt neared the conversation's context cap and older
+    messages were folded into its summary. Token counts are estimates. `summary` describes
+    the change in words (it is not the summary itself); the reply keeps it as a note."""
+
+    type: Literal["context_compacted"] = "context_compacted"
+    messages: int
+    tokens_before: int
+    tokens_after: int
+    summary: str
+
+
 class RunCompletedEvent(ApiModel):
     type: Literal["run_completed"] = "run_completed"
     message_id: str
@@ -84,6 +96,7 @@ ChatEventUnion = Annotated[
     | ThinkingDeltaEvent
     | UsageUpdatedEvent
     | MemoryUpdatedEvent
+    | ContextCompactedEvent
     | RunCompletedEvent
     | RunFailedEvent
     | ToolStartedEvent

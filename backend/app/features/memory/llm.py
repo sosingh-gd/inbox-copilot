@@ -12,7 +12,7 @@ from anthropic.types import MessageParam
 
 from app.agents.models import HAIKU, AgentError, TokenUsage
 from app.agents.prompts import render_prompt
-from app.agents.trace import ModelCall, assign_tokens, describe_input
+from app.agents.trace import describe_input
 
 from .schemas import FactOperation, FactOperations
 
@@ -61,23 +61,7 @@ class ClaudeFactExtractor:
             logger.exception("memory compaction call failed")
             raise AgentError("llm_error", "Claude could not be reached.") from exc
 
-        usage.add(response.usage)
-        cache_read = response.usage.cache_read_input_tokens or 0
-        cache_write = response.usage.cache_creation_input_tokens or 0
-        call_input = response.usage.input_tokens + cache_read + cache_write
-        assign_tokens(sections, call_input, cache_read, cache_write)
-        usage.calls.append(
-            ModelCall(
-                agent=AGENT_NAME,
-                turn=len([c for c in usage.calls if c.agent == AGENT_NAME]) + 1,
-                model=response.model,
-                input_tokens=call_input,
-                cache_read_tokens=cache_read,
-                cache_write_tokens=cache_write,
-                output_tokens=response.usage.output_tokens,
-                sections=sections,
-            )
-        )
+        usage.record(AGENT_NAME, response.model, response.usage, sections)
 
         parsed = response.parsed_output
         if parsed is None:

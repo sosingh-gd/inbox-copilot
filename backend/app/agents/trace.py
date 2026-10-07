@@ -13,7 +13,7 @@ from typing import Any, Literal
 from anthropic.types import MessageParam, ToolUnionParam
 
 SectionKind = Literal[
-    "system", "memory", "tool_definition", "text", "thinking", "tool_use", "tool_result"
+    "system", "memory", "summary", "tool_definition", "text", "thinking", "tool_use", "tool_result"
 ]
 
 MAX_SECTION_CHARS = 50_000  # keeps one huge tool result from bloating the database
@@ -50,9 +50,10 @@ def describe_input(
     tools: list[ToolUnionParam],
     messages: list[MessageParam],
     memory: str | None = None,
+    summary: str | None = None,
 ) -> list[InputSection]:
     """Split one request's input into sections, in the order Claude reads them: tools,
-    then system, then messages."""
+    then system (prompt, memory, conversation summary), then messages."""
     sections = [
         _section("tool_definition", str(tool.get("name", "tool")), json.dumps(tool, indent=2))
         for tool in tools
@@ -60,6 +61,8 @@ def describe_input(
     sections.append(_section("system", "system prompt", system))
     if memory:
         sections.append(_section("memory", "remembered facts", memory))
+    if summary:
+        sections.append(_section("summary", "conversation summary", summary))
     tool_names: dict[str, str] = {}  # tool_use id -> tool name, to label the results
     for message in messages:
         role = message["role"]

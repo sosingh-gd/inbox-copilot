@@ -28,6 +28,13 @@ class Conversation(Base):
     prompt_caching: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     # The created_at of the last message turned into facts. None: nothing compacted yet.
     compacted_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    # Context compaction: when the prompt nears `context_cap` tokens, older messages are
+    # folded into `summary`, and Claude sees the summary instead of them. `summarized_through`
+    # is the created_at of the last folded message, `summarized_at` when the summary was made.
+    context_cap: Mapped[int] = mapped_column(Integer, default=8_000, server_default="8000")
+    summary: Mapped[str | None] = mapped_column(Text)
+    summarized_through: Mapped[datetime | None] = mapped_column(UTCDateTime())
+    summarized_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now, index=True)
 

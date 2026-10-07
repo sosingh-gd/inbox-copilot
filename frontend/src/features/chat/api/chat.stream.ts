@@ -12,6 +12,8 @@ interface StreamHandlers {
   onThinking: (text: string) => void;
   /** Earlier chats were turned into facts before the reply started. */
   onMemoryUpdated: (summary: string) => void;
+  /** Older messages were summarized because the prompt neared the chat's context cap. */
+  onContextCompacted: (summary: string) => void;
   /** Running token totals for this message, sub-agents included. */
   onUsage: (usage: Usage) => void;
   /** Claude called a tool; the reply continues once `onToolFinished` follows. */
@@ -51,6 +53,7 @@ export async function streamChatRun(
       else if (event.type === 'thinking_delta') options.onThinking(event.text);
       else if (event.type === 'usage_updated') options.onUsage(event.usage);
       else if (event.type === 'memory_updated') options.onMemoryUpdated(event.summary);
+      else if (event.type === 'context_compacted') options.onContextCompacted(event.summary);
       else if (event.type === 'tool_started') options.onToolStarted(event.agent, event.tool);
       else if (event.type === 'tool_finished') {
         options.onToolFinished(event.tool, event.ok, event.durationMs);

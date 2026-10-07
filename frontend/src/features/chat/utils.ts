@@ -6,6 +6,7 @@ export function settingsOf(source: ChatSettings): ChatSettings {
     model: source.model,
     reasoning: source.reasoning,
     promptCaching: source.promptCaching,
+    contextCap: source.contextCap,
     useMemory: source.useMemory,
     saveToMemory: source.saveToMemory,
   };
@@ -38,6 +39,11 @@ export function formatDuration(ms: number): string {
 
 export function formatCount(count: number): string {
   return count.toLocaleString();
+}
+
+/** "6.8k" for token counts in tight spaces. */
+export function formatThousands(count: number): string {
+  return `${(count / 1000).toFixed(1)}k`;
 }
 
 /** All input tokens: Anthropic counts cached input apart from `inputTokens`. */

@@ -62,7 +62,7 @@ export function useChat(
 
   function changeSetting<K extends keyof ChatSettings>(name: K, value: ChatSettings[K]) {
     setChosenSettings({ ...settings, [name]: value });
-    // Model, reasoning and prompt caching go with each message, but "save to memory" is stored on the
+    // Model, reasoning, prompt caching and the context cap go with each message, but "save to memory" is stored on the
     // conversation straight away. A new chat sends it when the conversation is created.
     if (name === 'saveToMemory' && activeId !== undefined) {
       const saveToMemory = value === true;
@@ -112,6 +112,9 @@ export function useChat(
         queryClient.setQueryData<ConversationDetail>(chatKeys.detail(id), {
           ...created,
           messages: [],
+          summary: null,
+          summarizedThrough: null,
+          contextTokens: 0,
         });
         setCreatedId(id);
       }
@@ -131,6 +134,7 @@ export function useChat(
           model: settings.model,
           reasoning: settings.reasoning,
           promptCaching: settings.promptCaching,
+          contextCap: settings.contextCap,
         },
         {
           signal: controller.signal,
@@ -155,11 +159,9 @@ export function useChat(
               ...reply,
               parts: finishToolPart(reply.parts ?? [], tool, ok, durationMs),
             })),
-          onMemoryUpdated: (summary) =>
-            updateReply(conversationKey, (reply) => ({
-              ...reply,
-              parts: [{ type: 'note', text: summary }, ...(reply.parts ?? [])],
-            })),
+          // Notes come before any thinking or text, in the order they arrive.
+          onMemoryUpdated: (summary) => updateReply(conversationKey, addNote(summary)),
+          onContextCompacted: (summary) => updateReply(conversationKey, addNote(summary)),
           onUsage: (usage) => updateReply(conversationKey, (reply) => ({ ...reply, usage })),
           onCompleted: (durationMs) =>
             updateReply(conversationKey, (reply) => ({ ...reply, durationMs })),
@@ -190,6 +192,10 @@ export function useChat(
     isLoading: conversation.isLoading,
     loadError: conversation.error,
     messages,
+    // What Claude sees instead of the older messages, once the chat has neared its cap.
+    summary: conversation.data?.summary ?? null,
+    summarizedThrough: conversation.data?.summarizedThrough ?? null,
+    contextTokens: conversation.data?.contextTokens ?? null,
     totalUsage: totalUsageOf(messages),
     cacheSavings: conversationSavingsOf(messages),
     isReplying,
@@ -202,6 +208,15 @@ export function useChat(
     setDraft,
     canSend: draft.trim() !== '' && !isReplying,
     send,
+  };
+}
+
+function addNote(text: string) {
+  return (reply: ChatMessage): ChatMessage => {
+    const parts = reply.parts ?? [];
+    const firstOther = parts.findIndex((part) => part.type !== 'note');
+    const at = firstOther === -1 ? parts.length : firstOther;
+    return { ...reply, parts: [...parts.slice(0, at), { type: 'note', text }, ...parts.slice(at)] };
   };
 }
 

@@ -51,6 +51,10 @@ def create_tables() -> None:
 # (table, column, SQL type and default)
 _ADDED_COLUMNS = [
     ("conversations", "prompt_caching", "BOOLEAN NOT NULL DEFAULT 1"),
+    ("conversations", "context_cap", "INTEGER NOT NULL DEFAULT 8000"),
+    ("conversations", "summary", "TEXT"),
+    ("conversations", "summarized_through", "DATETIME"),
+    ("conversations", "summarized_at", "DATETIME"),
 ]
 
 

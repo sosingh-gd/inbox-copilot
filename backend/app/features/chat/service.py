@@ -2,8 +2,9 @@ import asyncio
 import logging
 import time
 from collections.abc import AsyncIterator, Sequence
-from dataclasses import asdict, dataclass
-from typing import Any, Literal
+from dataclasses import asdict, dataclass, replace
+from datetime import date, datetime
+from typing import Any
 
 from anthropic.types import MessageParam
 from sqlalchemy.orm import Session, sessionmaker
@@ -23,9 +24,23 @@ from app.agents.registry import AgentRegistry
 from app.agents.trace import ModelCall
 from app.core.errors import NotFoundError
 from app.core.schemas import ApiModel
+from app.db.base import utc_now
 from app.features.memory.service import CompactionResult, MemoryService
 
+from .compaction import (
+    ContextEstimate,
+    HistoryMessage,
+    estimate_context,
+    fits_after,
+    needs_compaction,
+    plan_compaction,
+    summary_for_prompt,
+    summary_words,
+    transcript,
+    worth_folding,
+)
 from .events import (
+    ContextCompactedEvent,
     MemoryUpdatedEvent,
     RunCompletedEvent,
     RunFailedEvent,
@@ -36,6 +51,7 @@ from .events import (
     ToolStartedEvent,
     UsageUpdatedEvent,
 )
+from .llm import ConversationSummarizer
 from .models import ChatMessage, Conversation
 from .repository import ChatRepository
 from .schemas import (
@@ -65,12 +81,6 @@ EFFORTS: dict[ReasoningLevel, Effort] = {
 
 
 @dataclass(frozen=True)
-class LlmMessage:
-    role: Literal["user", "assistant"]
-    content: str
-
-
-@dataclass(frozen=True)
 class ChatTurn:
     """Everything the stream needs, loaded before streaming starts."""
 
@@ -80,7 +90,11 @@ class ChatTurn:
     model: ModelChoice
     reasoning: ReasoningLevel
     prompt_caching: bool
-    history: list[LlmMessage]
+    # The messages Claude sees word for word (those after the summary), ending with the new one.
+    history: list[HistoryMessage]
+    summary: str | None
+    context_cap: int
+    context: ContextEstimate  # the prompt's estimated size, the new message included
     use_memory: bool
     # Lazy compaction: a conversation's first message first turns the user's other saved
     # conversations into facts, so this one starts with an up-to-date memory.
@@ -93,11 +107,13 @@ class ChatService:
         repo: ChatRepository,
         agents: AgentRegistry,
         memory: MemoryService,
+        summarizer: ConversationSummarizer,
         new_session: sessionmaker[Session],
     ) -> None:
         self.repo = repo
         self.agents = agents
         self.memory = memory
+        self.summarizer = summarizer
         # Streams outlive the request, so writes after streaming use their own short session.
         self.new_session = new_session
 
@@ -107,7 +123,12 @@ class ChatService:
         ]
 
     def get_conversation(self, user_id: int, conversation_id: str) -> ConversationDetail:
-        return ConversationDetail.model_validate(self._owned_conversation(user_id, conversation_id))
+        conversation = self._owned_conversation(user_id, conversation_id)
+        detail = ConversationDetail.model_validate(conversation)
+        detail.context_tokens = estimate_context(
+            _unsummarized(conversation), conversation.summary, conversation.summarized_at
+        ).tokens
+        return detail
 
     def create_conversation(self, user_id: int, request: ConversationCreate) -> ConversationSummary:
         conversation = self.repo.add_conversation(
@@ -117,6 +138,7 @@ class ChatService:
                 model=request.model,
                 reasoning=request.reasoning,
                 prompt_caching=request.prompt_caching,
+                context_cap=request.context_cap,
                 use_memory=request.use_memory,
                 save_to_memory=request.save_to_memory,
             )
@@ -147,19 +169,29 @@ class ChatService:
         conversation.model = request.model
         conversation.reasoning = request.reasoning
         conversation.prompt_caching = request.prompt_caching
+        conversation.context_cap = request.context_cap
 
         message = self.repo.add_message(
             ChatMessage(conversation_id=conversation.id, role="user", content=request.content)
         )
         self.repo.commit()
         self.repo.session.refresh(conversation)
+        history = _unsummarized(conversation)
+        context = estimate_context(history, conversation.summary, conversation.summarized_at)
         logger.info(
             "message_received conversation=%s message=%s chars=%d history_messages=%d "
-            "model=%s reasoning=%s prompt_caching=%s",
+            "summarized_messages=%d context_tokens~%d fixed_tokens~%d chars_per_token=%.2f "
+            "context_cap=%d model=%s reasoning=%s "
+            "prompt_caching=%s",
             conversation.id,
             message.id,
             len(request.content),
-            len(conversation.messages),
+            len(history),
+            len(conversation.messages) - len(history),
+            context.tokens,
+            context.fixed_tokens,
+            1 / context.tokens_per_char,
+            request.context_cap,
             request.model.value,
             request.reasoning.value,
             request.prompt_caching,
@@ -172,7 +204,10 @@ class ChatService:
             model=request.model,
             reasoning=request.reasoning,
             prompt_caching=request.prompt_caching,
-            history=[LlmMessage(role=m.role, content=m.content) for m in conversation.messages],  # type: ignore[arg-type]
+            history=history,
+            summary=conversation.summary,
+            context_cap=request.context_cap,
+            context=context,
             use_memory=conversation.use_memory,
             compact_memory=conversation.use_memory and is_first_message,
         )
@@ -183,15 +218,12 @@ class ChatService:
             conversation_id=turn.conversation_id, user_message_id=turn.user_message_id
         )
 
-        history: list[MessageParam] = [
-            {"role": m.role, "content": m.content} for m in _merge_consecutive(turn.history)
-        ]
         finished: RunFinished | None = None
         usage: Usage | None = None
         calls: list[ModelCall] = []
+        notes: list[str] = []  # shown above the reply, never sent to Claude
 
         memory: str | None = None
-        memory_note: str | None = None
         if turn.use_memory:
             if turn.compact_memory:
                 totals = self.agents.usage
@@ -199,13 +231,13 @@ class ChatService:
                     turn.user_id, turn.conversation_id, totals
                 )
                 if compaction.conversations:
-                    memory_note = _memory_note(compaction)
+                    notes.append(_memory_note(compaction))
                     yield MemoryUpdatedEvent(
                         conversations=compaction.conversations,
                         added=compaction.added,
                         updated=compaction.updated,
                         deleted=compaction.deleted,
-                        summary=memory_note,
+                        summary=notes[-1],
                     )
                 if totals.calls:
                     usage = Usage.model_validate(totals, from_attributes=True)
@@ -213,13 +245,29 @@ class ChatService:
                     yield UsageUpdatedEvent(usage=usage)
             memory = await asyncio.to_thread(self.memory.facts_for_prompt, turn.user_id)
 
+        history, summary = turn.history, turn.summary
+        if needs_compaction(turn.context, turn.context_cap):
+            compacted = await self._compact_context(turn)
+            if compacted is not None:
+                history, summary, compacted_event = compacted
+                notes.append(compacted_event.summary)
+                yield compacted_event
+                totals = self.agents.usage
+                usage = Usage.model_validate(totals, from_attributes=True)
+                calls = list(totals.calls)
+                yield UsageUpdatedEvent(usage=usage)
+
+        messages: list[MessageParam] = [
+            {"role": m.role, "content": m.content} for m in _merge_consecutive(history)
+        ]
         try:
             async for event in self.agents.stream(
-                history,
+                messages,
                 MODEL_IDS[turn.model],
                 EFFORTS[turn.reasoning],
                 memory,
                 turn.prompt_caching,
+                summary_for_prompt(summary),
             ):
                 match event:
                     case TextDelta(text=text):
@@ -256,7 +304,7 @@ class ChatService:
             duration_ms,
             usage,
             calls,
-            memory_note,
+            notes,
         )
         logger.info(
             "run_completed saved_message=%s duration_ms=%d parts=%s %s",
@@ -266,6 +314,90 @@ class ChatService:
             _usage_summary(usage),
         )
         yield RunCompletedEvent(message_id=message_id, duration_ms=duration_ms, usage=usage)
+
+    async def _compact_context(
+        self, turn: ChatTurn
+    ) -> tuple[list[HistoryMessage], str, ContextCompactedEvent] | None:
+        """Fold the oldest messages into the summary. Returns the messages still sent word for
+        word, the new summary and the event announcing it, or None when nothing was folded:
+        then the reply goes ahead with the whole history, over the cap or not."""
+        context, cap = turn.context, turn.context_cap
+        plan = plan_compaction(turn.history, context, cap)
+        if plan is None:
+            logger.warning(
+                "context_over_cap context_tokens~%d cap=%d: only the newest exchange is left",
+                context.tokens,
+                cap,
+            )
+            return None
+        if not worth_folding(plan, cap):
+            # Typically right after a compaction that could not get under the cap: wait until
+            # enough has built up, rather than paying for a summary every message.
+            logger.info(
+                "context_compaction_skipped fold_tokens~%d cap=%d: too little to fold yet",
+                plan.fold_tokens,
+                cap,
+            )
+            return None
+        if not fits_after(plan, context, cap):
+            logger.warning(
+                "context_cap_too_small cap=%d fixed_tokens~%d keep_tokens~%d: the prompt stays "
+                "over the cap's trigger after compacting; pick a larger cap for this chat",
+                cap,
+                context.fixed_tokens,
+                plan.keep_tokens,
+            )
+        try:
+            summary = await self.summarizer.summarize(
+                turn.summary,
+                transcript(plan.fold),
+                summary_words(context, cap),
+                date.today(),
+                self.agents.usage,
+            )
+        except AgentError as exc:
+            logger.warning("context_compaction_failed code=%s", exc.code)
+            return None
+
+        await asyncio.to_thread(
+            self._save_summary, turn.conversation_id, summary, plan.fold[-1].created_at
+        )
+        tokens_after = (
+            context.fixed_tokens + context.of(summary_for_prompt(summary)) + plan.keep_tokens
+        )
+        folded = len(plan.fold)
+        note = (
+            f"Context compacted: {folded} earlier message{'s' if folded > 1 else ''} summarized, "
+            f"prompt ~{_thousands(context.tokens)} → ~{_thousands(tokens_after)} tokens "
+            f"(cap {_thousands(cap)})."
+        )
+        logger.info(
+            "context_compacted folded_messages=%d kept_messages=%d summary_chars=%d "
+            "context_tokens~%d->%d cap=%d",
+            folded,
+            len(plan.keep),
+            len(summary),
+            context.tokens,
+            tokens_after,
+            cap,
+        )
+        event = ContextCompactedEvent(
+            messages=folded,
+            tokens_before=context.tokens,
+            tokens_after=tokens_after,
+            summary=note,
+        )
+        return plan.keep, summary, event
+
+    def _save_summary(self, conversation_id: str, summary: str, through: datetime) -> None:
+        with self.new_session() as session:
+            conversation = session.get(Conversation, conversation_id)
+            if conversation is None:
+                return  # deleted while the summary was written
+            conversation.summary = summary
+            conversation.summarized_through = through
+            conversation.summarized_at = utc_now()
+            session.commit()
 
     def _owned_conversation(self, user_id: int, conversation_id: str) -> Conversation:
         conversation = self.repo.get_conversation(conversation_id, user_id)
@@ -280,7 +412,7 @@ class ChatService:
         duration_ms: int,
         usage: Usage | None,
         calls: list[ModelCall],
-        memory_note: str | None,
+        notes: list[str],
     ) -> str:
         with self.new_session() as session:
             repo = ChatRepository(session)
@@ -289,9 +421,9 @@ class ChatService:
                     conversation_id=conversation_id,
                     role="assistant",
                     content=finished.text,
-                    # The memory note is shown with the reply but kept out of `content`, so
-                    # Claude never sees it in the history.
-                    parts=([{"type": "note", "text": memory_note}] if memory_note else [])
+                    # Memory and compaction notes are shown with the reply but kept out of
+                    # `content`, so Claude never sees them in the history.
+                    parts=[{"type": "note", "text": note} for note in notes]
                     + [_part_dict(p) for p in finished.parts],
                     duration_ms=duration_ms,
                     usage=usage.model_dump() if usage else None,
@@ -319,6 +451,26 @@ def _memory_note(compaction: CompactionResult) -> str:
     return f"Memory updated from {chats}: {', '.join(changes)}."
 
 
+def _thousands(tokens: int) -> str:
+    """E.g. 6800 -> "6.8k"."""
+    return f"{tokens / 1000:.1f}k"
+
+
+def _unsummarized(conversation: Conversation) -> list[HistoryMessage]:
+    """The messages after the summary: the ones Claude sees word for word."""
+    through = conversation.summarized_through
+    return [
+        HistoryMessage(
+            role=m.role,  # type: ignore[arg-type]
+            content=m.content,
+            created_at=m.created_at,
+            calls=m.calls,
+        )
+        for m in conversation.messages
+        if through is None or m.created_at > through
+    ]
+
+
 def _usage_summary(usage: Usage | None) -> str:
     """Token totals for the log, sub-agents included."""
     if usage is None:
@@ -341,14 +493,12 @@ def _title_from(content: str) -> str:
     return line if len(line) <= TITLE_LENGTH else line[: TITLE_LENGTH - 1].rstrip() + "…"
 
 
-def _merge_consecutive(history: Sequence[LlmMessage]) -> list[LlmMessage]:
+def _merge_consecutive(history: Sequence[HistoryMessage]) -> list[HistoryMessage]:
     """A failed reply leaves two user messages in a row; join them into one turn."""
-    merged: list[LlmMessage] = []
+    merged: list[HistoryMessage] = []
     for message in history:
         if merged and merged[-1].role == message.role:
-            merged[-1] = LlmMessage(
-                role=message.role, content=f"{merged[-1].content}\n\n{message.content}"
-            )
+            merged[-1] = replace(message, content=f"{merged[-1].content}\n\n{message.content}")
         else:
             merged.append(message)
     return merged

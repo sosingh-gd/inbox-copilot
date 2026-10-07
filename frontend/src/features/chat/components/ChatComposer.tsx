@@ -7,6 +7,7 @@ interface ChatComposerProps {
   settings: ChatSettingsBarProps['settings'];
   onSettingChange: ChatSettingsBarProps['onChange'];
   isMemoryLocked: boolean;
+  contextTokens: ChatSettingsBarProps['contextTokens'];
   draft: string;
   onDraftChange: (draft: string) => void;
   canSend: boolean;
@@ -17,6 +18,7 @@ export function ChatComposer({
   settings,
   onSettingChange,
   isMemoryLocked,
+  contextTokens,
   draft,
   onDraftChange,
   canSend,
@@ -33,6 +35,7 @@ export function ChatComposer({
   return (
     <div className="w-full">
       <ChatSettingsBar
+        contextTokens={contextTokens}
         isMemoryLocked={isMemoryLocked}
         onChange={onSettingChange}
         settings={settings}

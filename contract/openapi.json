@@ -5,6 +5,7 @@
         "description": "Every SSE `data:` payload on the chat stream is one of these.",
         "discriminator": {
           "mapping": {
+            "context_compacted": "#/components/schemas/ContextCompactedEvent",
             "memory_updated": "#/components/schemas/MemoryUpdatedEvent",
             "run_completed": "#/components/schemas/RunCompletedEvent",
             "run_failed": "#/components/schemas/RunFailedEvent",
@@ -34,6 +35,9 @@
             "$ref": "#/components/schemas/MemoryUpdatedEvent"
           },
           {
+            "$ref": "#/components/schemas/ContextCompactedEvent"
+          },
+          {
             "$ref": "#/components/schemas/RunCompletedEvent"
           },
           {
@@ -49,13 +53,20 @@
         "title": "ChatEvent"
       },
       "ChatRunRequest": {
-        "description": "Send one user message. Model, reasoning and prompt caching may change from message\nto message.",
+        "description": "Send one user message. Model, reasoning, prompt caching and the context cap may change\nfrom message to message.",
         "properties": {
           "content": {
             "maxLength": 20000,
             "minLength": 1,
             "title": "Content",
             "type": "string"
+          },
+          "contextCap": {
+            "default": 8000,
+            "maximum": 200000.0,
+            "minimum": 1000.0,
+            "title": "Contextcap",
+            "type": "integer"
           },
           "model": {
             "$ref": "#/components/schemas/ModelChoice",
@@ -77,9 +88,52 @@
         "title": "ChatRunRequest",
         "type": "object"
       },
+      "ContextCompactedEvent": {
+        "description": "Sent before the reply when the prompt neared the conversation's context cap and older\nmessages were folded into its summary. Token counts are estimates. `summary` describes\nthe change in words (it is not the summary itself); the reply keeps it as a note.",
+        "properties": {
+          "messages": {
+            "title": "Messages",
+            "type": "integer"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "tokensAfter": {
+            "title": "Tokensafter",
+            "type": "integer"
+          },
+          "tokensBefore": {
+            "title": "Tokensbefore",
+            "type": "integer"
+          },
+          "type": {
+            "const": "context_compacted",
+            "default": "context_compacted",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "messages",
+          "tokensBefore",
+          "tokensAfter",
+          "summary"
+        ],
+        "title": "ContextCompactedEvent",
+        "type": "object"
+      },
       "ConversationCreate": {
         "description": "Start an empty conversation. Its first message gives it a title.",
         "properties": {
+          "contextCap": {
+            "default": 8000,
+            "maximum": 200000.0,
+            "minimum": 1000.0,
+            "title": "Contextcap",
+            "type": "integer"
+          },
           "model": {
             "$ref": "#/components/schemas/ModelChoice",
             "default": "sonnet"
@@ -109,6 +163,18 @@
       },
       "ConversationDetail": {
         "properties": {
+          "contextCap": {
+            "default": 8000,
+            "maximum": 200000.0,
+            "minimum": 1000.0,
+            "title": "Contextcap",
+            "type": "integer"
+          },
+          "contextTokens": {
+            "default": 0,
+            "title": "Contexttokens",
+            "type": "integer"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -138,6 +204,29 @@
             "title": "Savetomemory",
             "type": "boolean"
           },
+          "summarizedThrough": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summarizedthrough"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
           "title": {
             "title": "Title",
             "type": "string"
@@ -159,16 +248,27 @@
           "model",
           "reasoning",
           "promptCaching",
+          "contextCap",
           "id",
           "title",
           "updatedAt",
-          "messages"
+          "messages",
+          "summary",
+          "summarizedThrough",
+          "contextTokens"
         ],
         "title": "ConversationDetail",
         "type": "object"
       },
       "ConversationSummary": {
         "properties": {
+          "contextCap": {
+            "default": 8000,
+            "maximum": 200000.0,
+            "minimum": 1000.0,
+            "title": "Contextcap",
+            "type": "integer"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -212,6 +312,7 @@
           "model",
           "reasoning",
           "promptCaching",
+          "contextCap",
           "id",
           "title",
           "updatedAt"
@@ -337,6 +438,7 @@
             "enum": [
               "system",
               "memory",
+              "summary",
               "tool_definition",
               "text",
               "thinking",

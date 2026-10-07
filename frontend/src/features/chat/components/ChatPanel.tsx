@@ -19,6 +19,7 @@ export function ChatPanel({ conversationId, onConversationCreated, userInitial }
   const composer = (
     <ChatComposer
       canSend={chat.canSend}
+      contextTokens={chat.contextTokens}
       draft={chat.draft}
       isMemoryLocked={chat.isMemoryLocked}
       onDraftChange={chat.setDraft}
@@ -65,7 +66,13 @@ export function ChatPanel({ conversationId, onConversationCreated, userInitial }
           <Spinner label="Loading conversation" />
         </div>
       ) : (
-        <MessageList error={chat.error} messages={chat.messages} userInitial={userInitial} />
+        <MessageList
+          error={chat.error}
+          messages={chat.messages}
+          summarizedThrough={chat.summarizedThrough}
+          summary={chat.summary}
+          userInitial={userInitial}
+        />
       )}
       <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-4 sm:px-8">
         <div className="mx-auto w-full max-w-3xl">{composer}</div>
