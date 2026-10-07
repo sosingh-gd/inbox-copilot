@@ -1,10 +1,11 @@
 import { LIVE_REPLY_ID } from './constants';
-import type { ChatMessage, ChatSettings, MessagePart, Usage } from './types';
+import type { ChatMessage, ChatSettings, MessagePart, ModelCall, Usage } from './types';
 
 export function settingsOf(source: ChatSettings): ChatSettings {
   return {
     model: source.model,
     reasoning: source.reasoning,
+    promptCaching: source.promptCaching,
     useMemory: source.useMemory,
     saveToMemory: source.saveToMemory,
   };
@@ -58,6 +59,41 @@ export function totalUsageOf(messages: ChatMessage[]): Usage | null {
     cacheReadTokens: total.cacheReadTokens + usage.cacheReadTokens,
     cacheWriteTokens: total.cacheWriteTokens + usage.cacheWriteTokens,
   }));
+}
+
+/** What prompt caching changed for a set of Claude calls. All but `sentInput` are estimates. */
+export interface CacheSavings {
+  /** Input tokens actually sent to Claude, cached or not. */
+  sentInput: number;
+  /** The same input, counted as if every token were charged at the normal input price. */
+  billedInput: number;
+  /** US dollars; null when a call's model has no known prices. */
+  costUsd: number | null;
+  costWithoutCacheUsd: number | null;
+}
+
+/** Savings for these calls, or null when none of them read from or wrote to the cache. */
+export function cacheSavingsOf(calls: ModelCall[]): CacheSavings | null {
+  if (!calls.some((call) => call.cacheReadTokens + call.cacheWriteTokens > 0)) return null;
+  const sum = (value: (call: ModelCall) => number) =>
+    calls.reduce((total, call) => total + value(call), 0);
+  const hasPrices = calls.every((call) => call.costUsd !== null);
+  return {
+    sentInput: sum((call) => call.inputTokens),
+    billedInput: sum((call) => call.billedInputTokens),
+    costUsd: hasPrices ? sum((call) => call.costUsd ?? 0) : null,
+    costWithoutCacheUsd: hasPrices ? sum((call) => call.costWithoutCacheUsd ?? 0) : null,
+  };
+}
+
+/** Savings over every saved reply in the conversation. */
+export function conversationSavingsOf(messages: ChatMessage[]): CacheSavings | null {
+  return cacheSavingsOf(messages.flatMap((message) => message.calls ?? []));
+}
+
+/** "$0.0039": four decimals, since one reply costs a fraction of a cent. */
+export function formatUsd(amount: number): string {
+  return amount > 0 && amount < 0.0001 ? '<$0.0001' : `$${amount.toFixed(4)}`;
 }
 
 /** True for the reply that is still streaming in. */

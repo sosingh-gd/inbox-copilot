@@ -43,6 +43,8 @@ class AgentDefinition:
     effort: Effort | None = None
     # Facts remembered from earlier conversations, sent as a second system block.
     memory: str | None = None
+    # Mark the prompt for Claude's prompt cache, so unchanged input is read back cheaply.
+    prompt_caching: bool = False
 
 
 @dataclass

@@ -1,8 +1,9 @@
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import AwareDatetime, Field
+from pydantic import AwareDatetime, Field, computed_field
 
+from app.agents.pricing import CallCost, call_cost
 from app.core.schemas import ApiModel
 
 
@@ -23,6 +24,8 @@ MessageRole = Literal["user", "assistant"]
 class ChatSettings(ApiModel):
     model: ModelChoice = ModelChoice.sonnet
     reasoning: ReasoningLevel = ReasoningLevel.balanced
+    # Ask Claude to cache the unchanged start of each prompt. Off: every call pays full price.
+    prompt_caching: bool = True
 
 
 class MemorySettings(ApiModel):
@@ -43,11 +46,13 @@ class ConversationUpdate(ApiModel):
 
 
 class ChatRunRequest(ApiModel):
-    """Send one user message. Model and reasoning may change from message to message."""
+    """Send one user message. Model, reasoning and prompt caching may change from message
+    to message."""
 
     content: str = Field(min_length=1, max_length=20_000)
     model: ModelChoice = ModelChoice.sonnet
     reasoning: ReasoningLevel = ReasoningLevel.balanced
+    prompt_caching: bool = True
 
 
 class Usage(ApiModel):
@@ -84,7 +89,9 @@ MessagePart = Annotated[TextPart | ToolPart, Field(discriminator="type")]
 class InputSection(ApiModel):
     """One piece of what a Claude call sent: the system prompt, a tool definition, or a
     block of a message. `tokens` is an estimate: the call's real input tokens, shared out
-    by each section's size."""
+    by each section's size. The cache is a prefix, so the first `cacheReadTokens` of the
+    call were read from the cache and the next `cacheWriteTokens` were written to it; each
+    section's two cache fields are its share of those, estimated the same way."""
 
     kind: Literal[
         "system", "memory", "tool_definition", "text", "thinking", "tool_use", "tool_result"
@@ -93,6 +100,8 @@ class InputSection(ApiModel):
     text: str  # very long sections are cut short; `chars` is the full length
     chars: int
     tokens: int
+    cache_read_tokens: int = 0  # replies saved before caching was tracked have neither
+    cache_write_tokens: int = 0
 
 
 class ModelCall(ApiModel):
@@ -103,8 +112,40 @@ class ModelCall(ApiModel):
     model: str
     input_tokens: int  # all input, cached included
     cache_read_tokens: int
+    cache_write_tokens: int = 0
     output_tokens: int
+    # Whether the call asked Claude to cache its prompt.
+    prompt_caching: bool = False
     sections: list[InputSection]
+
+    # Estimates from list prices, worked out when read so earlier replies get them too.
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def billed_input_tokens(self) -> int:
+        """The input as if every token were charged at the normal input price: cache reads
+        count for a fraction of a token, cache writes for 1.25."""
+        return self._cost().billed_input_tokens
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def cost_usd(self) -> float | None:
+        """Estimated US dollars for this call. None for a model without known prices."""
+        return self._cost().cost_usd
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def cost_without_cache_usd(self) -> float | None:
+        """What the same call would have cost with every input token at full price."""
+        return self._cost().cost_without_cache_usd
+
+    def _cost(self) -> CallCost:
+        return call_cost(
+            self.model,
+            self.input_tokens,
+            self.cache_read_tokens,
+            self.cache_write_tokens,
+            self.output_tokens,
+        )
 
 
 class MessageRead(ApiModel):

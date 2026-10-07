@@ -179,13 +179,19 @@ export interface components {
         ChatEvent: components["schemas"]["RunStartedEvent"] | components["schemas"]["TextDeltaEvent"] | components["schemas"]["ThinkingDeltaEvent"] | components["schemas"]["UsageUpdatedEvent"] | components["schemas"]["MemoryUpdatedEvent"] | components["schemas"]["RunCompletedEvent"] | components["schemas"]["RunFailedEvent"] | components["schemas"]["ToolStartedEvent"] | components["schemas"]["ToolFinishedEvent"];
         /**
          * ChatRunRequest
-         * @description Send one user message. Model and reasoning may change from message to message.
+         * @description Send one user message. Model, reasoning and prompt caching may change from message
+         *     to message.
          */
         ChatRunRequest: {
             /** Content */
             content: string;
             /** @default sonnet */
             model: components["schemas"]["ModelChoice"];
+            /**
+             * Promptcaching
+             * @default true
+             */
+            promptCaching: boolean;
             /** @default balanced */
             reasoning: components["schemas"]["ReasoningLevel"];
         };
@@ -196,6 +202,11 @@ export interface components {
         ConversationCreate: {
             /** @default sonnet */
             model: components["schemas"]["ModelChoice"];
+            /**
+             * Promptcaching
+             * @default true
+             */
+            promptCaching: boolean;
             /** @default balanced */
             reasoning: components["schemas"]["ReasoningLevel"];
             /**
@@ -217,6 +228,11 @@ export interface components {
             messages: components["schemas"]["MessageRead"][];
             /** @default sonnet */
             model: components["schemas"]["ModelChoice"];
+            /**
+             * Promptcaching
+             * @default true
+             */
+            promptCaching: boolean;
             /** @default balanced */
             reasoning: components["schemas"]["ReasoningLevel"];
             /**
@@ -243,6 +259,11 @@ export interface components {
             id: string;
             /** @default sonnet */
             model: components["schemas"]["ModelChoice"];
+            /**
+             * Promptcaching
+             * @default true
+             */
+            promptCaching: boolean;
             /** @default balanced */
             reasoning: components["schemas"]["ReasoningLevel"];
             /**
@@ -309,9 +330,21 @@ export interface components {
          * InputSection
          * @description One piece of what a Claude call sent: the system prompt, a tool definition, or a
          *     block of a message. `tokens` is an estimate: the call's real input tokens, shared out
-         *     by each section's size.
+         *     by each section's size. The cache is a prefix, so the first `cacheReadTokens` of the
+         *     call were read from the cache and the next `cacheWriteTokens` were written to it; each
+         *     section's two cache fields are its share of those, estimated the same way.
          */
         InputSection: {
+            /**
+             * Cachereadtokens
+             * @default 0
+             */
+            cacheReadTokens: number;
+            /**
+             * Cachewritetokens
+             * @default 0
+             */
+            cacheWriteTokens: number;
             /** Chars */
             chars: number;
             /**
@@ -397,14 +430,40 @@ export interface components {
         ModelCall: {
             /** Agent */
             agent: string;
+            /**
+             * Billedinputtokens
+             * @description The input as if every token were charged at the normal input price: cache reads
+             *     count for a fraction of a token, cache writes for 1.25.
+             */
+            readonly billedInputTokens: number;
             /** Cachereadtokens */
             cacheReadTokens: number;
+            /**
+             * Cachewritetokens
+             * @default 0
+             */
+            cacheWriteTokens: number;
+            /**
+             * Costusd
+             * @description Estimated US dollars for this call. None for a model without known prices.
+             */
+            readonly costUsd: number | null;
+            /**
+             * Costwithoutcacheusd
+             * @description What the same call would have cost with every input token at full price.
+             */
+            readonly costWithoutCacheUsd: number | null;
             /** Inputtokens */
             inputTokens: number;
             /** Model */
             model: string;
             /** Outputtokens */
             outputTokens: number;
+            /**
+             * Promptcaching
+             * @default false
+             */
+            promptCaching: boolean;
             /** Sections */
             sections: components["schemas"]["InputSection"][];
             /** Turn */

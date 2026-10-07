@@ -1,4 +1,4 @@
-import { BrainCircuit, Cpu, History, Save } from 'lucide-react';
+import { BrainCircuit, Cpu, DatabaseZap, History, Save } from 'lucide-react';
 import { SegmentedControl, Select, Toggle } from '@/components';
 import { MODEL_OPTIONS, REASONING_OPTIONS } from '../constants';
 import type { ChatSettings } from '../types';
@@ -27,6 +27,18 @@ export function ChatSettingsBar({ settings, onChange, isMemoryLocked }: ChatSett
         onChange={(reasoning) => onChange('reasoning', reasoning)}
         options={REASONING_OPTIONS}
         value={settings.reasoning}
+      />
+
+      <Toggle
+        checked={settings.promptCaching}
+        hint={
+          settings.promptCaching
+            ? 'Unchanged input (tools, system prompt, earlier turns) is read back from the cache at a tenth of the price'
+            : 'Every Claude call pays full price for all of its input. Turn on to compare.'
+        }
+        icon={<DatabaseZap className="h-4 w-4 text-teal-700" />}
+        label="Prompt caching"
+        onChange={(promptCaching) => onChange('promptCaching', promptCaching)}
       />
 
       <Toggle

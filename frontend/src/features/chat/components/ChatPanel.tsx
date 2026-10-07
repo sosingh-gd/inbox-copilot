@@ -57,6 +57,7 @@ export function ChatPanel({ conversationId, onConversationCreated, userInitial }
       <ConversationHeader
         isReplying={chat.isReplying}
         title={chat.title ?? ''}
+        savings={chat.cacheSavings}
         usage={chat.totalUsage}
       />
       {chat.isLoading ? (

@@ -24,6 +24,8 @@ class Conversation(Base):
     # conversation exists), and whether this conversation's own facts are remembered.
     use_memory: Mapped[bool] = mapped_column(Boolean, default=True)
     save_to_memory: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Prompt caching for the next message; like model and reasoning, it can change per message.
+    prompt_caching: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     # The created_at of the last message turned into facts. None: nothing compacted yet.
     compacted_at: Mapped[datetime | None] = mapped_column(UTCDateTime())
     created_at: Mapped[datetime] = mapped_column(UTCDateTime(), default=utc_now)

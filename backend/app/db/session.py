@@ -2,7 +2,7 @@
 
 from collections.abc import Iterator
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -42,7 +42,25 @@ def create_tables() -> None:
     """Create missing tables. Replace with Alembic migrations once schemas start changing."""
     import app.db.models  # noqa: F401  - registers every model on Base.metadata
 
-    Base.metadata.create_all(bind=get_engine())
+    engine = get_engine()
+    Base.metadata.create_all(bind=engine)
+    _add_missing_columns(engine)
+
+
+# Columns added after their table was first created: create_all only creates missing tables.
+# (table, column, SQL type and default)
+_ADDED_COLUMNS = [
+    ("conversations", "prompt_caching", "BOOLEAN NOT NULL DEFAULT 1"),
+]
+
+
+def _add_missing_columns(engine: Engine) -> None:
+    inspector = inspect(engine)
+    with engine.begin() as connection:
+        for table, column, definition in _ADDED_COLUMNS:
+            existing = {c["name"] for c in inspector.get_columns(table)}
+            if column not in existing:
+                connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {definition}"))
 
 
 def session_factory() -> sessionmaker[Session]:

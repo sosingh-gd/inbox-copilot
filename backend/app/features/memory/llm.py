@@ -62,19 +62,18 @@ class ClaudeFactExtractor:
             raise AgentError("llm_error", "Claude could not be reached.") from exc
 
         usage.add(response.usage)
-        call_input = (
-            response.usage.input_tokens
-            + (response.usage.cache_read_input_tokens or 0)
-            + (response.usage.cache_creation_input_tokens or 0)
-        )
-        assign_tokens(sections, call_input)
+        cache_read = response.usage.cache_read_input_tokens or 0
+        cache_write = response.usage.cache_creation_input_tokens or 0
+        call_input = response.usage.input_tokens + cache_read + cache_write
+        assign_tokens(sections, call_input, cache_read, cache_write)
         usage.calls.append(
             ModelCall(
                 agent=AGENT_NAME,
                 turn=len([c for c in usage.calls if c.agent == AGENT_NAME]) + 1,
                 model=response.model,
                 input_tokens=call_input,
-                cache_read_tokens=response.usage.cache_read_input_tokens or 0,
+                cache_read_tokens=cache_read,
+                cache_write_tokens=cache_write,
                 output_tokens=response.usage.output_tokens,
                 sections=sections,
             )

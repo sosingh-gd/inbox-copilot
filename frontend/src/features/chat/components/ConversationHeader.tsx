@@ -1,5 +1,7 @@
 import { cn } from '@/utils/cn';
 import type { Usage } from '../types';
+import type { CacheSavings as Savings } from '../utils';
+import { CacheSavings } from './CacheSavings';
 import { TokenCounts } from './TokenCounts';
 
 interface ConversationHeaderProps {
@@ -7,9 +9,11 @@ interface ConversationHeaderProps {
   isReplying: boolean;
   /** Tokens used by the whole conversation, or null before its first reply. */
   usage: Usage | null;
+  /** What prompt caching saved over the whole conversation, or null if it never cached. */
+  savings: Savings | null;
 }
 
-export function ConversationHeader({ title, isReplying, usage }: ConversationHeaderProps) {
+export function ConversationHeader({ title, isReplying, usage, savings }: ConversationHeaderProps) {
   return (
     <div className="flex h-16 shrink-0 items-center border-b border-slate-200 px-5 sm:px-8">
       <h1 className="min-w-0 truncate text-base font-semibold text-ink">{title}</h1>
@@ -17,6 +21,11 @@ export function ConversationHeader({ title, isReplying, usage }: ConversationHea
         {usage && (
           <span className="hidden text-ink-muted sm:inline-flex">
             <TokenCounts usage={usage} />
+          </span>
+        )}
+        {savings && (
+          <span className="hidden md:inline-flex">
+            <CacheSavings compact savings={savings} />
           </span>
         )}
         <span

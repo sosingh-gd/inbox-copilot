@@ -49,7 +49,7 @@
         "title": "ChatEvent"
       },
       "ChatRunRequest": {
-        "description": "Send one user message. Model and reasoning may change from message to message.",
+        "description": "Send one user message. Model, reasoning and prompt caching may change from message\nto message.",
         "properties": {
           "content": {
             "maxLength": 20000,
@@ -60,6 +60,11 @@
           "model": {
             "$ref": "#/components/schemas/ModelChoice",
             "default": "sonnet"
+          },
+          "promptCaching": {
+            "default": true,
+            "title": "Promptcaching",
+            "type": "boolean"
           },
           "reasoning": {
             "$ref": "#/components/schemas/ReasoningLevel",
@@ -78,6 +83,11 @@
           "model": {
             "$ref": "#/components/schemas/ModelChoice",
             "default": "sonnet"
+          },
+          "promptCaching": {
+            "default": true,
+            "title": "Promptcaching",
+            "type": "boolean"
           },
           "reasoning": {
             "$ref": "#/components/schemas/ReasoningLevel",
@@ -114,6 +124,11 @@
             "$ref": "#/components/schemas/ModelChoice",
             "default": "sonnet"
           },
+          "promptCaching": {
+            "default": true,
+            "title": "Promptcaching",
+            "type": "boolean"
+          },
           "reasoning": {
             "$ref": "#/components/schemas/ReasoningLevel",
             "default": "balanced"
@@ -143,6 +158,7 @@
           "saveToMemory",
           "model",
           "reasoning",
+          "promptCaching",
           "id",
           "title",
           "updatedAt",
@@ -161,6 +177,11 @@
             "$ref": "#/components/schemas/ModelChoice",
             "default": "sonnet"
           },
+          "promptCaching": {
+            "default": true,
+            "title": "Promptcaching",
+            "type": "boolean"
+          },
           "reasoning": {
             "$ref": "#/components/schemas/ReasoningLevel",
             "default": "balanced"
@@ -190,6 +211,7 @@
           "saveToMemory",
           "model",
           "reasoning",
+          "promptCaching",
           "id",
           "title",
           "updatedAt"
@@ -295,8 +317,18 @@
         "type": "object"
       },
       "InputSection": {
-        "description": "One piece of what a Claude call sent: the system prompt, a tool definition, or a\nblock of a message. `tokens` is an estimate: the call's real input tokens, shared out\nby each section's size.",
+        "description": "One piece of what a Claude call sent: the system prompt, a tool definition, or a\nblock of a message. `tokens` is an estimate: the call's real input tokens, shared out\nby each section's size. The cache is a prefix, so the first `cacheReadTokens` of the\ncall were read from the cache and the next `cacheWriteTokens` were written to it; each\nsection's two cache fields are its share of those, estimated the same way.",
         "properties": {
+          "cacheReadTokens": {
+            "default": 0,
+            "title": "Cachereadtokens",
+            "type": "integer"
+          },
+          "cacheWriteTokens": {
+            "default": 0,
+            "title": "Cachewritetokens",
+            "type": "integer"
+          },
           "chars": {
             "title": "Chars",
             "type": "integer"
@@ -332,7 +364,9 @@
           "label",
           "text",
           "chars",
-          "tokens"
+          "tokens",
+          "cacheReadTokens",
+          "cacheWriteTokens"
         ],
         "title": "InputSection",
         "type": "object"
@@ -525,9 +559,46 @@
             "title": "Agent",
             "type": "string"
           },
+          "billedInputTokens": {
+            "description": "The input as if every token were charged at the normal input price: cache reads\ncount for a fraction of a token, cache writes for 1.25.",
+            "readOnly": true,
+            "title": "Billedinputtokens",
+            "type": "integer"
+          },
           "cacheReadTokens": {
             "title": "Cachereadtokens",
             "type": "integer"
+          },
+          "cacheWriteTokens": {
+            "default": 0,
+            "title": "Cachewritetokens",
+            "type": "integer"
+          },
+          "costUsd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Estimated US dollars for this call. None for a model without known prices.",
+            "readOnly": true,
+            "title": "Costusd"
+          },
+          "costWithoutCacheUsd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What the same call would have cost with every input token at full price.",
+            "readOnly": true,
+            "title": "Costwithoutcacheusd"
           },
           "inputTokens": {
             "title": "Inputtokens",
@@ -540,6 +611,11 @@
           "outputTokens": {
             "title": "Outputtokens",
             "type": "integer"
+          },
+          "promptCaching": {
+            "default": false,
+            "title": "Promptcaching",
+            "type": "boolean"
           },
           "sections": {
             "items": {
@@ -559,8 +635,13 @@
           "model",
           "inputTokens",
           "cacheReadTokens",
+          "cacheWriteTokens",
           "outputTokens",
-          "sections"
+          "promptCaching",
+          "sections",
+          "billedInputTokens",
+          "costUsd",
+          "costWithoutCacheUsd"
         ],
         "title": "ModelCall",
         "type": "object"

@@ -10,7 +10,14 @@ import {
 import { streamChatRun } from '../api/chat.stream';
 import { DEFAULT_SETTINGS, LIVE_REPLY_ID } from '../constants';
 import type { ChatMessage, ChatSettings, ConversationDetail } from '../types';
-import { appendToParts, finishToolPart, settingsOf, startToolPart, totalUsageOf } from '../utils';
+import {
+  appendToParts,
+  conversationSavingsOf,
+  finishToolPart,
+  settingsOf,
+  startToolPart,
+  totalUsageOf,
+} from '../utils';
 
 /**
  * Everything the chat panel needs for one conversation, or for a new chat when
@@ -55,7 +62,7 @@ export function useChat(
 
   function changeSetting<K extends keyof ChatSettings>(name: K, value: ChatSettings[K]) {
     setChosenSettings({ ...settings, [name]: value });
-    // Model and reasoning go with each message, but "save to memory" is stored on the
+    // Model, reasoning and prompt caching go with each message, but "save to memory" is stored on the
     // conversation straight away. A new chat sends it when the conversation is created.
     if (name === 'saveToMemory' && activeId !== undefined) {
       const saveToMemory = value === true;
@@ -119,7 +126,12 @@ export function useChat(
 
       await streamChatRun(
         conversationKey,
-        { content, model: settings.model, reasoning: settings.reasoning },
+        {
+          content,
+          model: settings.model,
+          reasoning: settings.reasoning,
+          promptCaching: settings.promptCaching,
+        },
         {
           signal: controller.signal,
           onText: (text) =>
@@ -179,6 +191,7 @@ export function useChat(
     loadError: conversation.error,
     messages,
     totalUsage: totalUsageOf(messages),
+    cacheSavings: conversationSavingsOf(messages),
     isReplying,
     error,
     settings,

@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { cn } from '@/utils/cn';
 import { useElapsedMs } from '../hooks/useElapsedMs';
 import type { ChatMessage } from '../types';
-import { formatDuration, isLiveReply } from '../utils';
+import { cacheSavingsOf, formatDuration, isLiveReply } from '../utils';
+import { CacheSavings } from './CacheSavings';
 import { InputBreakdown } from './InputBreakdown';
 import { TokenCounts } from './TokenCounts';
 
@@ -14,13 +15,15 @@ interface MessageStatsProps {
 /**
  * Time and tokens for one reply: live while it streams, then the saved values. Replies saved
  * before these were recorded have neither, so they show nothing. Saved replies can also open
- * a breakdown of everything that was sent to Claude as input.
+ * a breakdown of everything that was sent to Claude as input, and replies that used the prompt
+ * cache show what it saved.
  */
 export function MessageStats({ message }: MessageStatsProps) {
   const [showInput, setShowInput] = useState(false);
   const isRunning = isLiveReply(message);
   const { durationMs, calls } = message;
   if (!isRunning && durationMs === null && !message.usage) return null;
+  const savings = calls ? cacheSavingsOf(calls) : null;
 
   return (
     <>
@@ -55,6 +58,7 @@ export function MessageStats({ message }: MessageStatsProps) {
           </button>
         )}
       </div>
+      {savings && <CacheSavings savings={savings} />}
       {showInput && calls && <InputBreakdown calls={calls} />}
     </>
   );

@@ -10,6 +10,7 @@ import anthropic
 from anthropic import AsyncAnthropic, Omit, omit
 from anthropic.lib.streaming import ParsedMessageStreamEvent
 from anthropic.types import (
+    CacheControlEphemeralParam,
     MessageParam,
     OutputConfigParam,
     TextBlockParam,
@@ -38,6 +39,9 @@ logger = logging.getLogger(__name__)
 REQUEST_TIMEOUT_SECONDS = 60
 MAX_RETRIES = 2
 TOKEN_BUDGET = 60_000  # per user message, summed over all turns (thinking counts as output)
+
+# Marks the end of a prompt prefix to cache, for 5 minutes (each cache hit restarts the timer).
+CACHE_MARKER: CacheControlEphemeralParam = {"type": "ephemeral"}
 
 # Haiku 4.5 has no `effort` setting; it thinks within a fixed token budget instead.
 HAIKU_THINKING_BUDGETS: dict[Effort, int] = {"medium": 2_048, "high": 8_192, "xhigh": 8_192}
@@ -80,14 +84,20 @@ class AgentRunner:
         messages = list(messages)  # copy so the caller's list is not modified
         parts: list[ReplyPart | ToolPart] = []
         thinking, output_config, max_tokens = _reasoning_params(agent)
+        # A top-level marker caches the whole prompt up to its last block, so each turn reads
+        # the turns before it back from the cache. The system block carries its own marker.
+        cache_control: CacheControlEphemeralParam | Omit = (
+            CACHE_MARKER if agent.prompt_caching else omit
+        )
         input_tokens = output_tokens = 0
         run_started = time.perf_counter()
         logger.info(
-            "agent=%s run_started model=%s effort=%s max_turns=%d max_tokens=%d tools=%s "
-            "messages=%d",
+            "agent=%s run_started model=%s effort=%s prompt_caching=%s max_turns=%d "
+            "max_tokens=%d tools=%s messages=%d",
             agent.name,
             agent.model,
             agent.effort,
+            agent.prompt_caching,
             agent.max_turns,
             max_tokens,
             [t.name for t in agent.tools],
@@ -107,6 +117,7 @@ class AgentRunner:
                     system=_system_blocks(agent),
                     tools=tool_params,
                     messages=messages,
+                    cache_control=cache_control,
                 ) as stream:
                     async for event in stream:
                         piece = _reply_piece(event, parts)
@@ -154,20 +165,20 @@ class AgentRunner:
                         )
 
             usage.add(turn_usage)
-            call_input = (
-                turn_usage.input_tokens
-                + (turn_usage.cache_read_input_tokens or 0)
-                + (turn_usage.cache_creation_input_tokens or 0)
-            )
-            assign_tokens(sections, call_input)
+            cache_read = turn_usage.cache_read_input_tokens or 0
+            cache_write = turn_usage.cache_creation_input_tokens or 0
+            call_input = turn_usage.input_tokens + cache_read + cache_write
+            assign_tokens(sections, call_input, cache_read, cache_write)
             usage.calls.append(
                 ModelCall(
                     agent=agent.name,
                     turn=turn,
                     model=response.model,
                     input_tokens=call_input,
-                    cache_read_tokens=turn_usage.cache_read_input_tokens or 0,
+                    cache_read_tokens=cache_read,
+                    cache_write_tokens=cache_write,
                     output_tokens=turn_usage.output_tokens,
+                    prompt_caching=agent.prompt_caching,
                     sections=sections,
                 )
             )
@@ -328,8 +339,12 @@ class AgentRunner:
 
 def _system_blocks(agent: AgentDefinition) -> list[TextBlockParam]:
     """The system prompt, then the remembered facts as their own block, so the fixed prompt
-    is sent unchanged whatever is remembered."""
+    is sent unchanged whatever is remembered. With caching on, the fixed prompt is marked:
+    tools come before it, so tools and system prompt are cached together and are read back
+    even when the memory or the conversation changes."""
     blocks: list[TextBlockParam] = [{"type": "text", "text": agent.system_prompt}]
+    if agent.prompt_caching:
+        blocks[0]["cache_control"] = CACHE_MARKER
     if agent.memory:
         blocks.append({"type": "text", "text": agent.memory})
     return blocks

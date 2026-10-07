@@ -79,6 +79,7 @@ class ChatTurn:
     user_message_id: str
     model: ModelChoice
     reasoning: ReasoningLevel
+    prompt_caching: bool
     history: list[LlmMessage]
     use_memory: bool
     # Lazy compaction: a conversation's first message first turns the user's other saved
@@ -115,6 +116,7 @@ class ChatService:
                 title=NEW_CONVERSATION_TITLE,
                 model=request.model,
                 reasoning=request.reasoning,
+                prompt_caching=request.prompt_caching,
                 use_memory=request.use_memory,
                 save_to_memory=request.save_to_memory,
             )
@@ -144,6 +146,7 @@ class ChatService:
             conversation.title = _title_from(request.content)
         conversation.model = request.model
         conversation.reasoning = request.reasoning
+        conversation.prompt_caching = request.prompt_caching
 
         message = self.repo.add_message(
             ChatMessage(conversation_id=conversation.id, role="user", content=request.content)
@@ -152,13 +155,14 @@ class ChatService:
         self.repo.session.refresh(conversation)
         logger.info(
             "message_received conversation=%s message=%s chars=%d history_messages=%d "
-            "model=%s reasoning=%s",
+            "model=%s reasoning=%s prompt_caching=%s",
             conversation.id,
             message.id,
             len(request.content),
             len(conversation.messages),
             request.model.value,
             request.reasoning.value,
+            request.prompt_caching,
         )
 
         return ChatTurn(
@@ -167,6 +171,7 @@ class ChatService:
             user_message_id=message.id,
             model=request.model,
             reasoning=request.reasoning,
+            prompt_caching=request.prompt_caching,
             history=[LlmMessage(role=m.role, content=m.content) for m in conversation.messages],  # type: ignore[arg-type]
             use_memory=conversation.use_memory,
             compact_memory=conversation.use_memory and is_first_message,
@@ -210,7 +215,11 @@ class ChatService:
 
         try:
             async for event in self.agents.stream(
-                history, MODEL_IDS[turn.model], EFFORTS[turn.reasoning], memory
+                history,
+                MODEL_IDS[turn.model],
+                EFFORTS[turn.reasoning],
+                memory,
+                turn.prompt_caching,
             ):
                 match event:
                     case TextDelta(text=text):

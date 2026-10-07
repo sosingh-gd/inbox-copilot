@@ -2,6 +2,8 @@
 
 The API reports one input token count per call, not per section. Each section's share is
 estimated from its size in characters, scaled so the sections add up to the real count.
+The prompt cache works on a prefix, so the cached part of a call is its first sections:
+walking them in the order Claude reads them shows which ones came from the cache.
 """
 
 import json
@@ -24,6 +26,8 @@ class InputSection:
     text: str
     chars: int  # of the full text, before any truncation
     tokens: int = 0  # estimated share of the call's input tokens
+    cache_read_tokens: int = 0  # the part of `tokens` read from the prompt cache
+    cache_write_tokens: int = 0  # the part of `tokens` written to the prompt cache
 
 
 @dataclass
@@ -36,6 +40,8 @@ class ModelCall:
     input_tokens: int  # all input, cached or not
     cache_read_tokens: int
     output_tokens: int
+    cache_write_tokens: int = 0
+    prompt_caching: bool = False  # whether the call asked Claude to cache its prompt
     sections: list[InputSection] = field(default_factory=list)
 
 
@@ -45,14 +51,15 @@ def describe_input(
     messages: list[MessageParam],
     memory: str | None = None,
 ) -> list[InputSection]:
-    """Split one request's input into sections, in the order Claude receives them."""
-    sections = [_section("system", "system prompt", system)]
+    """Split one request's input into sections, in the order Claude reads them: tools,
+    then system, then messages."""
+    sections = [
+        _section("tool_definition", str(tool.get("name", "tool")), json.dumps(tool, indent=2))
+        for tool in tools
+    ]
+    sections.append(_section("system", "system prompt", system))
     if memory:
         sections.append(_section("memory", "remembered facts", memory))
-    for tool in tools:
-        sections.append(
-            _section("tool_definition", str(tool.get("name", "tool")), json.dumps(tool, indent=2))
-        )
     tool_names: dict[str, str] = {}  # tool_use id -> tool name, to label the results
     for message in messages:
         role = message["role"]
@@ -65,11 +72,33 @@ def describe_input(
     return sections
 
 
-def assign_tokens(sections: list[InputSection], input_tokens: int) -> None:
-    """Give each section a share of the call's real input tokens, in proportion to its size."""
+def assign_tokens(
+    sections: list[InputSection],
+    input_tokens: int,
+    cache_read_tokens: int = 0,
+    cache_write_tokens: int = 0,
+) -> None:
+    """Give each section a share of the call's real input tokens, in proportion to its size.
+
+    `input_tokens` is all of the call's input. The first `cache_read_tokens` of it were read
+    from the cache and the next `cache_write_tokens` written to it, so each section's cache
+    fields are how much of it falls inside those two stretches.
+    """
     total_chars = sum(s.chars for s in sections) or 1
+    read_end = cache_read_tokens
+    write_end = cache_read_tokens + cache_write_tokens
+    start = 0
     for section in sections:
         section.tokens = round(input_tokens * section.chars / total_chars)
+        end = start + section.tokens
+        section.cache_read_tokens = _overlap(start, end, 0, read_end)
+        section.cache_write_tokens = _overlap(start, end, read_end, write_end)
+        start = end
+
+
+def _overlap(start: int, end: int, range_start: int, range_end: int) -> int:
+    """How many tokens of [start, end) fall inside [range_start, range_end)."""
+    return max(0, min(end, range_end) - max(start, range_start))
 
 
 def _block_section(role: str, block: dict[str, Any], tool_names: dict[str, str]) -> InputSection:

@@ -32,15 +32,14 @@ class AgentRegistry:
         settings: Settings,
         today: date | None = None,
     ) -> None:
-        today = today or date.today()
-        specialists = [
-            build_email_agent(email_source, today),
-            build_calendar_agent(calendar_source, today),
+        self._today = today or date.today()
+        self._specialists = [
+            build_email_agent(email_source, self._today),
+            build_calendar_agent(calendar_source, self._today),
             build_weather_agent(weather_source, settings),
         ]
         self._runner = runner
         self._usage = TokenUsage()  # one registry per request, so one total per message
-        self._orchestrator = build_orchestrator(runner, specialists, today, self._usage)
 
     @property
     def usage(self) -> TokenUsage:
@@ -49,10 +48,23 @@ class AgentRegistry:
         return self._usage
 
     def stream(
-        self, messages: list[MessageParam], model: str, effort: Effort, memory: str | None = None
+        self,
+        messages: list[MessageParam],
+        model: str,
+        effort: Effort,
+        memory: str | None = None,
+        prompt_caching: bool = False,
     ) -> AsyncIterator[AgentEvent]:
         """Run the orchestrator with the model and effort chosen for this message, and the
         facts remembered from earlier conversations. The specialists keep their own fixed
-        settings and never see memory."""
-        orchestrator = replace(self._orchestrator, model=model, effort=effort, memory=memory)
+        model and effort and never see memory. Prompt caching applies to every agent, so a
+        reply's token counts can be compared with caching on and off."""
+        specialists = [replace(s, prompt_caching=prompt_caching) for s in self._specialists]
+        orchestrator = replace(
+            build_orchestrator(self._runner, specialists, self._today, self._usage),
+            model=model,
+            effort=effort,
+            memory=memory,
+            prompt_caching=prompt_caching,
+        )
         return self._runner.stream(orchestrator, messages, self._usage)
