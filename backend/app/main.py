@@ -25,7 +25,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     configure_logging(settings.log_level)
     init_engine(settings.database_url)
     create_tables()
-    app.state.anthropic = AsyncAnthropic(api_key=settings.anthropic_api_key)
+    app.state.anthropic = AsyncAnthropic(
+        api_key=settings.anthropic_api_key,
+        base_url=settings.anthropic_base_url or None,  # empty value -> default endpoint
+    )
     app.state.agent_runner = AgentRunner(app.state.anthropic)
     yield
     await app.state.anthropic.close()

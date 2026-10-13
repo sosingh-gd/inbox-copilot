@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     google_client_secret: str
     token_encryption_key: str
     anthropic_api_key: str
+    # Empty = the SDK's default endpoint (https://api.anthropic.com).
+    anthropic_base_url: str | None = None
 
     database_url: str = "sqlite:///./app.db"
     session_ttl_days: int = 7
